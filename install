@@ -9,3 +9,8 @@ wget https://raw.githubusercontent.com/Wildlife-Systems/sensor-dht11/main/sensor
 chown root:root sensor-dht11
 chmod +x sensor-dht11
 mv sensor-dht11 /usr/bin
+
+sudo mkdir -p /var/aao/sensors
+wget https://raw.githubusercontent.com/Wildlife-Systems/sensor-dht11/main/dht11
+chown root:root dht11
+mv dht11 /var/aao/sensors
