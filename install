@@ -1,3 +1,6 @@
 #!/bin/bash
-sudo apt-get update
-sudo apt-get install git python3-setuptools python3-smbus python3-dev -y
+
+wget https://raw.githubusercontent.com/Wildlife-Systems/sensor-dht11/main/sensor-dht11
+chown root:root sensor-bme680
+chmod +x sensor-bme680
+mv sensor-bme680 /usr/bin
