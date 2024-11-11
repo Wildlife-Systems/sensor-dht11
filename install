@@ -1,6 +1,6 @@
 #!/bin/bash
 
 wget https://raw.githubusercontent.com/Wildlife-Systems/sensor-dht11/main/sensor-dht11
-chown root:root sensor-bme680
-chmod +x sensor-bme680
-mv sensor-bme680 /usr/bin
+chown root:root sensor-dht11
+chmod +x sensor-dht11
+mv sensor-dht11 /usr/bin
