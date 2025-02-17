@@ -1,8 +1,9 @@
 #!/bin/bash
 
+sudo apt install python3-pi python3-libgpiod
 sudo pip install adafruit-circuitpython-dht
 sudo pip install RPi.gpio
-sudo apt install python3-libgpiod
+
 
 wget https://raw.githubusercontent.com/Wildlife-Systems/sensor-dht11/main/sensor-dht11
 chown root:root sensor-dht11
