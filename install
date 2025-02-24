@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo apt install python3-pi python3-libgpiod
+sudo apt install python3-pi python3-libgpiod python3-pip
 sudo pip install adafruit-circuitpython-dht
 sudo pip install RPi.gpio
 
