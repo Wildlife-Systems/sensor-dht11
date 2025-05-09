@@ -11,6 +11,7 @@ setup(
     install_requires=[
         "adafruit-circuitpython-dht",
         "board",
+        "RPi.GPIO"
     ],
     entry_points={
         "console_scripts": [
