@@ -1,5 +1,5 @@
-sensor-dht11 (1.0.0) stable; urgency=low
+sensor-dht11 (1.0.1) stable; urgency=medium
 
-  * sensor-dht11: Initial debian packaging
+  * Depenency on sensor-control
 
  -- Ed Baker <ed@ebaker.me.uk>  Thu, 08 May 2025 17:27:03 +0100

@@ -9,7 +9,7 @@ Homepage: https://github.com/jschmoe/foobar
 Package: sensor-dht11
 Architecture: all
 Pre-Depends: dpkg (>= 1.16.1), python3, python3-venv, ${misc:Pre-Depends}
-Depends: ${python:Depends}, ${misc:Depends}
+Depends: ${python:Depends}, ${misc:Depends}, sensor-control
 Description: Read dht11 sensor in WildlifeSystems
     .
     This is a distribution of "sensor-dht11" as a self-contained
