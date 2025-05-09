@@ -1,0 +1,6 @@
+sensor-dht11.*.debhelper
+sensor-dht11.substvars
+sensor-dht11/
+sensor-dht11-*/
+files
+debhelper-build-stamp
