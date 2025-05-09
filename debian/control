@@ -2,7 +2,6 @@ Source: sensor-dht11
 Section: contrib/python
 Priority: extra
 Maintainer: Ed Baker <ed@ebaker.me.uk>
-Pre-Depends:libc6, libgpiod2t64
 Build-Depends: debhelper (>= 9), python3, python3-venv, python3-dev, python3-requests, dh-virtualenv (>= 1.1), tar, libgpiod2t64, libc6
 Standards-Version: 3.9.5
 Homepage: https://github.com/jschmoe/foobar
