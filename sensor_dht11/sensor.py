@@ -17,6 +17,9 @@ def cli():
         else:
             read_sensor()
             sys.exit(0)
+    else:
+        read_sensor()
+        sys.exit(0)
 
 def identify():
     """Identify the sensor."""
@@ -33,7 +36,7 @@ def read_sensor():
     if os.path.exists("/etc/ws/dht11.json"):
         with open("/etc/ws/dht11.json") as f:
             data = json.load(f)
-        #Loop over JSON objeects in data array
+        # Loop over JSON objects in data array
         for sensor in data:
             if "pin" in sensor:
                 pin = sensor["pin"]
@@ -58,7 +61,7 @@ def read_sensor_helper(pin, internal=False):
         sys.exit(21)
 
     """Read data from the DHT11 sensor."""
-    dhtDevice = adafruit_dht.DHT11(board.D4)
+    dhtDevice = adafruit_dht.DHT11(pin)
 
     # Get template JSON response
     stream = os.popen('sc-prototype')
@@ -90,17 +93,19 @@ def read_sensor_helper(pin, internal=False):
         except Exception as error:
             dhtDevice.exit()
             raise error
+
     if len(sys.argv) == 2:
-        if sys.argv[1] =="temperature":
-            ret="["+json.dumps(temperature)+"]"
-            return(ret)
+        if sys.argv[1] == "temperature":
+            ret = "[" + json.dumps(temperature) + "]"
+            return ret
         elif sys.argv[1] == "humidity":
-            ret="["+json.dumps(humidity)+"]"
-            return(ret)
+            ret = "[" + json.dumps(humidity) + "]"
+            return ret
         elif sys.argv[1] != "all":
             sys.exit(20)
-    ret="["+json.dumps(temperature)+","+json.dumps(humidity)+"]"
-    return(ret)
+
+    ret = "[" + json.dumps(temperature) + "," + json.dumps(humidity) + "]"
+    return ret
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
