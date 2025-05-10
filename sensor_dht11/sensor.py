@@ -14,9 +14,9 @@ def cli():
             identify()
         elif sys.argv[1] == "list":
             list_sensors()
-    else:
-        read_sensor()
-        sys.exit(0)
+        else:
+            read_sensor()
+            sys.exit(0)
 
 def identify():
     """Identify the sensor."""
@@ -60,8 +60,17 @@ def read_sensor():
         except Exception as error:
             dhtDevice.exit()
             raise error
+    if len(sys.argv) == 2:
+        if sys.argv[1] =="temperature":
+            print("[",json.dumps(temperature),"]")
+            return
+        elif sys.argv[1] == "humidity":
+            print("[",json.dumps(humidity),"]")
+            return
+        elif sys.argv[1] != "all":
+            sys.exit(20)
     print("[", json.dumps(temperature), ",", json.dumps(humidity), "]")
-    sys.exit(0)
+    return
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
