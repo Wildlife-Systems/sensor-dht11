@@ -14,9 +14,6 @@ def cli():
             identify()
         elif sys.argv[1] == "list":
             list_sensors()
-        else:
-            print("Invalid command. Use 'identify' or 'list'.")
-            sys.exit(1)
     else:
         read_sensor()
         sys.exit(0)
