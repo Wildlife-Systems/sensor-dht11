@@ -15,7 +15,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "sensor-dht11=sensor_dht11.sensor:read_sensor",
+            "sensor-dht11=sensor_dht11.sensor:cli",
         ],
     },
     classifiers=[
