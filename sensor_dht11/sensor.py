@@ -35,8 +35,7 @@ def read_sensor():
     """Read data from the DHT11 sensor."""
     dhtDevice = adafruit_dht.DHT11(board.D4)
 
-    #Get template JSON respone
-
+    # Get template JSON response
     stream = os.popen('sc-prototype')
     output = stream.read()
 
@@ -64,8 +63,8 @@ def read_sensor():
         except Exception as error:
             dhtDevice.exit()
             raise error
-    print("[",json.dumps(temperature),",",json.dumps(humidity),"]")
-    exit 
+    print("[", json.dumps(temperature), ",", json.dumps(humidity), "]")
+    sys.exit(0)
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
