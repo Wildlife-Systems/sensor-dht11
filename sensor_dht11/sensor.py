@@ -6,6 +6,7 @@ import board
 import adafruit_dht
 import os
 import json
+import subprocess
 
 def cli():
     """Command line interface for the DHT11 sensor."""
