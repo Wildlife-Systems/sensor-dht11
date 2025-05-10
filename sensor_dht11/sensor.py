@@ -6,7 +6,6 @@ import board
 import adafruit_dht
 import os
 import json
-import subprocess
 
 def cli():
     """Command line interface for the DHT11 sensor."""
@@ -36,26 +35,21 @@ def read_sensor():
     """Read data from the DHT11 sensor."""
     dhtDevice = adafruit_dht.DHT11(board.D4)
 
-    result = subprocess.run(["bash", "sc-prototype"], capture_output=True, text=True)
-    if result.returncode != 0:
-        print("Error: Unable to run sc-prototype script.")
-        sys.exit(1)
-    
-    # Read JSON from result
-    try:
-        json_data = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        print("Error: Failed to decode JSON data from sc-prototype.")
-        sys.exit(1)
+    #Get template JSON respone
 
-    json_data["sensor"] = "dht11"
+    stream = os.popen('sc-prototype')
+    output = stream.read()
 
-    temperature = json_data
+    temperature = json.loads(output)
+    humidity = json.loads(output)
+
+    temperature["sensor"] = "dht11_temperature"
     temperature["measures"] = "temperature"
-    temperature["unit"] = "Celsisu"
-    humidity = json_data
+    temperature["unit"] = "Celsius"
+
+    humidity["sensor"] = "dht11_humidity"
     humidity["measures"] = "humidity"
-    humidity["unit"] = "percent"
+    humidity["unit"] = "percentage"
 
     while True:
         try:
@@ -70,8 +64,8 @@ def read_sensor():
         except Exception as error:
             dhtDevice.exit()
             raise error
-
-    return [temperature, humidity]
+    print("[",json.dumps(temperature),",",json.dumps(humidity),"]")
+    exit 
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
