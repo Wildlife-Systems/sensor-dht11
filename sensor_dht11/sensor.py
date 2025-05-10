@@ -18,8 +18,8 @@ def cli():
             print("Invalid command. Use 'identify' or 'list'.")
             sys.exit(1)
     else:
-        print("Usage: sensor_dht11.py [identify|list]")
-        sys.exit(1)
+        read_sensor()
+        sys.exit(0)
 
 def identify():
     """Identify the sensor."""
