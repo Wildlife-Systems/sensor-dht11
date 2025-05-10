@@ -7,6 +7,20 @@ import adafruit_dht
 import os
 import json
 
+def cli():
+    """Command line interface for the DHT11 sensor."""
+    if len(sys.argv) == 2:
+        if sys.argv[1] == "identify":
+            identify()
+        elif sys.argv[1] == "list":
+            list_sensors()
+        else:
+            print("Invalid command. Use 'identify' or 'list'.")
+            sys.exit(1)
+    else:
+        print("Usage: sensor_dht11.py [identify|list]")
+        sys.exit(1)
+
 def identify():
     """Identify the sensor."""
     sys.exit(60)
