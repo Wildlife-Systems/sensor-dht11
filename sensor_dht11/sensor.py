@@ -29,6 +29,34 @@ def list_sensors():
     sys.exit(0)
 
 def read_sensor():
+    """Read JSON from /etc/ws/dht11.json"""
+    if os.path.exists("/etc/ws/dht11.json"):
+        with open("/etc/ws/dht11.json") as f:
+            data = json.load(f)
+        #Loop over JSON objeects in data array
+        for sensor in data:
+            if "pin" in sensor:
+                pin = sensor["pin"]
+            else:
+                pin = 4
+            if "internal" in sensor:
+                internal = sensor["internal"]
+            else:
+                internal = False
+        print(read_sensor_helper(pin, internal))
+        return
+
+    else:
+        print(read_sensor_helper(4))
+        return
+
+def read_sensor_helper(pin, internal=False):
+    if pin == 4:
+        pin = board.D4
+    else:
+        print("Invalid pin number")
+        sys.exit(21)
+
     """Read data from the DHT11 sensor."""
     dhtDevice = adafruit_dht.DHT11(board.D4)
 
@@ -42,10 +70,12 @@ def read_sensor():
     temperature["sensor"] = "dht11_temperature"
     temperature["measures"] = "temperature"
     temperature["unit"] = "Celsius"
+    temperature["internal"] = internal
 
     humidity["sensor"] = "dht11_humidity"
     humidity["measures"] = "humidity"
     humidity["unit"] = "percentage"
+    humidity["internal"] = internal
 
     while True:
         try:
@@ -62,15 +92,15 @@ def read_sensor():
             raise error
     if len(sys.argv) == 2:
         if sys.argv[1] =="temperature":
-            print("[",json.dumps(temperature),"]")
-            return
+            ret="["+json.dumps(temperature)+"]"
+            return(ret)
         elif sys.argv[1] == "humidity":
-            print("[",json.dumps(humidity),"]")
-            return
+            ret="["+json.dumps(humidity)+"]"
+            return(ret)
         elif sys.argv[1] != "all":
             sys.exit(20)
-    print("[", json.dumps(temperature), ",", json.dumps(humidity), "]")
-    return
+    ret="["+json.dumps(temperature)+","+json.dumps(humidity)+"]"
+    return(ret)
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
