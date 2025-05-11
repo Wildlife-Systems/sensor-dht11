@@ -7,6 +7,20 @@ import adafruit_dht
 import os
 import json
 
+def get_serial_number():
+    """Retrieve the Raspberry Pi's serial number."""
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if line.startswith("Serial"):
+                    return line.split(":")[1].strip() + "_dht11"
+    except FileNotFoundError:
+        print("Error: Unable to access /proc/cpuinfo. Are you running this on a Raspberry Pi?")
+        return None
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+
 def cli():
     """Command line interface for the DHT11 sensor."""
     if len(sys.argv) == 2:
@@ -48,7 +62,11 @@ def read_sensor():
                 internal = sensor["internal"]
             else:
                 internal = False
-            json_string = read_sensor_helper(pin, internal)
+            if "sensor_id" in sensor:
+                sensor_id = sensor["sensor_id"]
+            else:
+                sensor_id = get_serial_number()
+            json_string = read_sensor_helper(pin, internal, sensor_id)
             #Merge the JSON arrays in strings sensor_json and json_string
             if sensor_json == "":
                 sensor_json = json_string
@@ -61,7 +79,7 @@ def read_sensor():
         print(read_sensor_helper(4))
         return
 
-def read_sensor_helper(pin, internal=False):
+def read_sensor_helper(pin, internal=False, sensor_id=get_serial_number()):
     if pin == 4:
         pin = board.D4
     else:
@@ -82,11 +100,13 @@ def read_sensor_helper(pin, internal=False):
     temperature["measures"] = "temperature"
     temperature["unit"] = "Celsius"
     temperature["internal"] = internal
+    temperature["sensor_id"] = sensor_id + "_temperature"
 
     humidity["sensor"] = "dht11_humidity"
     humidity["measures"] = "humidity"
     humidity["unit"] = "percentage"
     humidity["internal"] = internal
+    humidity["sensor_id"] = sensor_id + "_humidity"
 
     while True:
         try:
