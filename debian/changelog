@@ -1,3 +1,9 @@
+sensor-dht11 (1.1.0) UNRELEASED; urgency=medium
+
+  * sensor-dht11 supports config file
+
+ -- Ed Baker <ed@ebaker.me.uk>  Sun, 11 May 2025 11:25:58 +0100
+
 sensor-dht11 (1.0.2) stable; urgency=high
 
   * sensor-dht11 conforms to sensor-control standards
