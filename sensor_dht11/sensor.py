@@ -32,8 +32,10 @@ def list_sensors():
     sys.exit(0)
 
 def read_sensor():
+    sensor_json = ""
     """Read JSON from /etc/ws/dht11.json"""
     if os.path.exists("/etc/ws/dht11.json"):
+        #Create empty arrat
         with open("/etc/ws/dht11.json") as f:
             data = json.load(f)
         # Loop over JSON objects in data array
@@ -46,7 +48,12 @@ def read_sensor():
                 internal = sensor["internal"]
             else:
                 internal = False
-        print(read_sensor_helper(pin, internal))
+            json_string = read_sensor_helper(pin, internal)
+            #Merge the JSON arrays in strings sensor_json and json_string
+            if sensor_json == "":
+                sensor_json = json_string
+            else:
+                sensor_json = sensor_json[:-1] + "," + json_string[1:]
         return
 
     else:
