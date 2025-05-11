@@ -54,6 +54,7 @@ def read_sensor():
                 sensor_json = json_string
             else:
                 sensor_json = sensor_json[:-1] + "," + json_string[1:]
+        print(sensor_json)
         return
 
     else:
