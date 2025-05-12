@@ -1,7 +1,12 @@
 # sensor-dht11
 
-## Installation instructions
+## Installing the software
+
+[Add the WildlifeSytems APT repository to your system](https://wildlife.systems/apt-configuration.html)
+
+Install sensor-dht11.
 
 ```
-wget -O - https://raw.githubusercontent.com/Wildlife-Systems/sensor-dht11/main/install | sudo bash
+sudo apt update
+sudo apt install sensor-dht11
 ```
