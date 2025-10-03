@@ -3,12 +3,12 @@
 export DH_VENV_ARGS=--setuptools --builtin-venv --python=/usr/bin/python3 --use-system-packages
 
 %:
-    dh $@ --with python-virtualenv
+	dh $@ --with python-virtualenv
 
 override_dh_shlibdeps:
-    dh_shlibdeps --exclude=adafruit_blinka
+	dh_shlibdeps --exclude=adafruit_blinka
 
 override_dh_auto_clean:
-    dh_auto_clean
-    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	dh_auto_clean
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
