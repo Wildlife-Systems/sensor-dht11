@@ -12,11 +12,23 @@
 #export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
 # package maintainers to append LDFLAGS
 #export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-	
-export DH_VENV_ARGS=--setuptools --builtin-venv --python=$(SNAKE) $(EXTRA_REQUIREMENTS) --use-system-packages
+
+export DH_VENV_ARGS=--setuptools --builtin-venv --python=/usr/bin/python3 $(EXTRA_REQUIREMENTS) --use-system-packages
 
 override_dh_shlibdeps:
-	dh_shlibdeps --exclude=adafruit_blinka
+    dh_shlibdeps --exclude=adafruit_blinka
+
+override_dh_auto_install:
+    dh_auto_install
+    # Fix shebangs to use system Python
+    find debian/sensor-dht11/opt/venvs/sensor-dht11/bin -type f -exec sed -i '1s|^#!.*/opt/venvs/.*python.*|#!/usr/bin/python3|' {} + || true
+
+override_dh_auto_clean:
+    dh_auto_clean
+    # Remove __pycache__ directories and .pyc files
+    find . -type d -name "__pycache__" -exec rm -rf {} + || true
+    find . -type f -name "*.pyc" -delete || true
+    find . -type f -name "*.pyo" -delete || true
 
 %:
-	dh $@ --with python-virtualenv
+    dh $@ --with python-virtualenv
