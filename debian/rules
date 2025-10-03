@@ -1,34 +1,14 @@
 #!/usr/bin/make -f
 
-# See debhelper(7) (uncomment to enable)
-# output every command that modifies files on the build system.
-#DH_VERBOSE = 1
+export DH_VENV_ARGS=--setuptools --builtin-venv --python=/usr/bin/python3 --use-system-packages
 
-# see FEATURE AREAS in dpkg-buildflags(1)
-#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
-
-# see ENVIRONMENT in dpkg-buildflags(1)
-# package maintainers to append CFLAGS
-#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
-# package maintainers to append LDFLAGS
-#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-
-export DH_VENV_ARGS=--setuptools --builtin-venv --python=/usr/bin/python3 $(EXTRA_REQUIREMENTS) --use-system-packages
+%:
+    dh $@ --with python-virtualenv
 
 override_dh_shlibdeps:
     dh_shlibdeps --exclude=adafruit_blinka
 
-override_dh_auto_install:
-    dh_auto_install
-    # Fix shebangs to use system Python
-    find debian/sensor-dht11/opt/venvs/sensor-dht11/bin -type f -exec sed -i '1s|^#!.*/opt/venvs/.*python.*|#!/usr/bin/python3|' {} + || true
-
 override_dh_auto_clean:
     dh_auto_clean
-    # Remove __pycache__ directories and .pyc files
-    find . -type d -name "__pycache__" -exec rm -rf {} + || true
-    find . -type f -name "*.pyc" -delete || true
-    find . -type f -name "*.pyo" -delete || true
-
-%:
-    dh $@ --with python-virtualenv
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name "*.pyc" -delete 2>/dev/null || true
