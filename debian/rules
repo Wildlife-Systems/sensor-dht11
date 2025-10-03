@@ -20,3 +20,8 @@ override_dh_shlibdeps:
 
 %:
 	dh $@ --with python-virtualenv
+
+override_dh_auto_clean:
+    dh_auto_clean
+    find . -type d -name "__pycache__" -exec rm -rf {} +
+    find . -type f -name "*.pyc" -delete
