@@ -2,9 +2,5 @@
   {
     "pin": 4,
     "internal": true
-  },
-  {
-    "pin": 4,
-    "internal": false
   }
 ]
