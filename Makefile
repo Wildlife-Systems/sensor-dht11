@@ -17,7 +17,7 @@ TARGET = sensor-dht11
 SOURCES = $(SRCDIR)/dht11.c
 HEADERS = $(SRCDIR)/dht11.h
 
-.PHONY: all clean install uninstall debug deb test
+.PHONY: all clean install uninstall debug deb
 
 all: $(TARGET)
 
@@ -27,10 +27,6 @@ $(TARGET): $(SOURCES) $(HEADERS)
 # Build with debug symbols
 debug: CFLAGS += -g -DDEBUG
 debug: $(TARGET)
-
-# Run unit tests (no hardware required)
-test:
-	$(MAKE) -C tests test
 
 # Install the binary
 install: $(TARGET)
@@ -47,7 +43,6 @@ uninstall:
 # Clean build artifacts
 clean:
 	rm -f $(TARGET)
-	$(MAKE) -C tests clean
 
 # For Debian packaging
 deb:
