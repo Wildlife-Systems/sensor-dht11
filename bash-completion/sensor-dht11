@@ -1,0 +1,21 @@
+# bash completion for sensor-dht11
+
+_sensor_dht11() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Available commands
+    opts="--version -v version identify list temperature humidity internal external all"
+
+    # Complete with available commands
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _sensor_dht11 sensor-dht11

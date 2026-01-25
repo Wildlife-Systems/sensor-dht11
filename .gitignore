@@ -1,5 +1,5 @@
 # Build output
-sensor-dht11
+/sensor-dht11
 *.o
 
 # Test output
