@@ -2,7 +2,7 @@
 # Uses Unity test framework
 
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -I../src -I../include -DTEST_BUILD
+CFLAGS = -Wall -Wextra -std=c99 -I../src -I../include -I/usr/include/ws -DTEST_BUILD
 
 # Source files
 UNITY_SRC = unity.c
