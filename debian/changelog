@@ -1,17 +1,10 @@
-sensor-dht11 (1.1.0) UNRELEASED; urgency=medium
+sensor-dht11 (2.0.0) stable; urgency=medium
 
-  * sensor-dht11 supports config file
+  * Rewritten in C for reduced dependencies and faster startup
+  * Removed Python runtime dependency
+  * Native GPIO access via /dev/gpiomem
+  * Same JSON output format as Python version
+  * Added internal/external location filter arguments
+  * Added bash completions
 
- -- Ed Baker <ed@ebaker.me.uk>  Sun, 11 May 2025 11:25:58 +0100
-
-sensor-dht11 (1.0.2) stable; urgency=high
-
-  * sensor-dht11 conforms to sensor-control standards
-
- -- Ed Baker <ed@ebaker.me.uk>  Sat, 10 May 2025 17:20:13 +0100
-
-sensor-dht11 (1.0.1) stable; urgency=medium
-
-  * Dependency on sensor-control
-
- -- Ed Baker <ed@ebaker.me.uk>  Thu, 08 May 2025 17:27:03 +0100
+ -- Ed Baker <ed@ebaker.me.uk>  Fri, 23 Jan 2026 12:00:00 +0000

@@ -1,7 +1,25 @@
-sensor_dht11.egg-info/*
-build/*
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Build output
+sensor-dht11
+*.o
 
+# Test output
+tests/run_tests
+
+# Benchmark output
+benchmarks/results_*.csv
+benchmarks/.bench_venv/
+
+# Debian build artifacts
+debian/*.debhelper
+debian/*.substvars
+debian/files
+debian/sensor-dht11/
+debian/.debhelper/
+*.deb
+*.buildinfo
+*.changes
+
+# Editor files
+*~
+*.swp
+.vscode/

@@ -1,12 +1,120 @@
-# sensor-dht11
+# sensor-dht11 (C version)
 
-## Installing the software
+A lightweight C implementation for reading DHT11 temperature and humidity sensors on Raspberry Pi using the Linux kernel IIO driver. This replaces the Python version with a native binary that has minimal dependencies and reliable timing.
 
-[Add the WildlifeSytems APT repository to your system](https://wildlife.systems/apt-configuration.html)
+## Building from source
 
-Install sensor-dht11.
-
+```bash
+make
 ```
+
+## Installing
+
+### From source
+
+```bash
+sudo make install
+```
+
+### From Debian package
+
+[Add the WildlifeSystems APT repository to your system](https://wildlife.systems/apt-configuration.html)
+
+```bash
 sudo apt update
 sudo apt install sensor-dht11
 ```
+
+## Usage
+
+### Enable DHT11 overlay (first-time setup)
+
+```bash
+sudo sensor-dht11 enable
+```
+
+This adds the dht11 overlay to `/boot/firmware/config.txt`. A reboot is required.
+
+Optionally specify a different GPIO pin (default is 4):
+
+```bash
+sudo sensor-dht11 enable 17
+```
+
+### Read sensors
+
+```bash
+# Read all sensors (temperature and humidity)
+sensor-dht11
+
+# Read only temperature
+sensor-dht11 temperature
+
+# Read only humidity
+sensor-dht11 humidity
+
+# List available sensor types
+sensor-dht11 list
+
+# Identify (exits with code 60)
+sensor-dht11 identify
+```
+
+## Configuration
+
+Configuration is read from `/etc/ws/sensors/dht11.json`. Example:
+
+```json
+[
+  {
+    "pin": 4,
+    "internal": false
+  }
+]
+```
+
+### Configuration options
+
+- `pin`: GPIO pin number (2-27)
+- `internal`: Boolean indicating if sensor is inside the enclosure
+- `sensor_id`: Optional custom sensor ID (defaults to Pi serial + "_dht11")
+
+## Output
+
+The program outputs JSON in the WildlifeSystems sensor format:
+
+```json
+[
+  {"sensor":"dht11_temperature","measures":"temperature","unit":"Celsius","value":23.0,"internal":false,"sensor_id":"1234567890abcdef_dht11_temperature"},
+  {"sensor":"dht11_humidity","measures":"humidity","unit":"percentage","value":45.0,"internal":false,"sensor_id":"1234567890abcdef_dht11_humidity"}
+]
+```
+
+## How it works
+
+This program uses the Linux kernel's IIO (Industrial I/O) DHT11 driver, which handles all timing-critical bit-banging in kernel space. This is much more reliable than user-space GPIO access.
+
+The kernel driver exposes sensor data via sysfs:
+- `/sys/bus/iio/devices/iio:deviceN/in_temp_input` - Temperature in millidegrees
+- `/sys/bus/iio/devices/iio:deviceN/in_humidityrelative_input` - Humidity in milli-percent
+
+## Requirements
+
+- Raspberry Pi with GPIO
+- Linux kernel with IIO DHT11 driver (included in Raspberry Pi OS)
+
+## Exit codes
+
+- `0`: Success
+- `20`: Invalid argument
+- `60`: Identify command
+
+## Author
+
+Ed Baker <ed@ebaker.me.uk>
+
+## Project
+
+Part of the WildlifeSystems project. For more information, visit:
+- https://wildlife.systems
+- https://docs.wildlife.systems

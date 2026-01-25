@@ -1,13 +1,129 @@
-.TH SENSOR-DHT11 1
+.TH SENSOR-DHT11 1 "January 2026" "sensor-dht11 2.1.0" "Wildlife Systems"
 .SH NAME
 sensor-dht11 \- read DHT11 sensors attached to a WildlifeSystems node
 .SH SYNOPSIS
 .B sensor-dht11
+.RI [ command ]
 .SH DESCRIPTION
 .B sensor-dht11
-Reads temperature and humidity data from a DHT11 sensor attached to the Raspberry Pi (default GPIO pin is 4).
-.SH OPTIONS
+reads temperature and humidity data from DHT11 sensors attached to the Raspberry Pi
+using libgpiod for GPIO bit-banging.
+.PP
+This is a lightweight C implementation that outputs sensor readings in JSON format
+compatible with WildlifeSystems. Each reading includes a Unix timestamp indicating
+when the sensor was read.
+.SH COMMANDS
 .TP
-None
+.B \-\-version, \-v, version
+Print version information and exit.
+.TP
+.B temperature
+Output only temperature readings.
+.TP
+.B humidity
+Output only humidity readings.
+.TP
+.B internal
+Output only readings from sensors marked as internal in the configuration.
+Only runs sensors that are configured with "internal": true.
+.TP
+.B external
+Output only readings from sensors marked as external in the configuration.
+Only runs sensors that are configured with "internal": false.
+.TP
+.B list
+List available sensor types (temperature, humidity).
+.TP
+.B identify
+Exit with code 60 for sensor identification.
+.TP
+.B all
+Output all sensor readings (default if no command given).
+.SH CONFIGURATION
+The configuration file
+.I /etc/ws/sensors/dht11.json
+is a JSON array of sensor objects. Each sensor object supports the following fields:
+.TP
+.B pin
+GPIO pin number (2-27). Default is 4.
+.TP
+.B internal
+Boolean indicating if the sensor is inside the enclosure. Default is false.
+.TP
+.B sensor_id
+Custom sensor identifier string. Default is derived from the Raspberry Pi serial number.
+.TP
+.B sensor_name
+Custom sensor name for the sensor_name field in JSON output. If not specified,
+the default from sc-prototype is used.
+.PP
+Example configuration:
+.PP
+.nf
+[
+  {
+    "pin": 4,
+    "internal": true,
+    "sensor_name": "enclosure_dht11"
+  }
+]
+.fi
+.SH OUTPUT FORMAT
+The program outputs a JSON array of sensor readings. Each reading includes:
+.TP
+.B sensor
+The sensor type (always "dht11_temperature" or "dht11_humidity").
+.TP
+.B measures
+What is being measured (e.g., "temperature", "humidity").
+.TP
+.B unit
+The unit of measurement (e.g., "Celsius", "percentage").
+.TP
+.B value
+The numeric reading value, or null on error.
+.TP
+.B internal
+Boolean indicating if the sensor is internal.
+.TP
+.B sensor_id
+The sensor identifier.
+.TP
+.B sensor_name
+Custom sensor name from configuration, or default from sc-prototype.
+.TP
+.B timestamp
+Unix timestamp (seconds since epoch) when the sensor was read.
+.TP
+.B error
+Error message if reading failed, null otherwise.
+.SH FILES
+.TP
+.I /etc/ws/sensors/dht11.json
+Configuration file specifying sensor pin, internal flag, sensor_id, and sensor_name.
+.TP
+.I /dev/gpiochip0
+GPIO chip device used for sensor communication.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 20
+Invalid argument.
+.TP
+.B 60
+Identify command executed.
 .SH NOTES
 This program is designed to be used with the \fBsr\fR program (sensor-read) from WildlifeSystems.
+.PP
+A watchdog timer (30 seconds) prevents the program from hanging indefinitely if GPIO
+operations become unresponsive.
+.PP
+GPIO pins are validated to be in the range 2-27 (valid Raspberry Pi GPIO pins).
+Invalid pins in the configuration file will be replaced with the default pin (4).
+.SH SEE ALSO
+.BR sr (1),
+.BR sensor-w1therm (1)
+.SH AUTHORS
+Wildlife Systems <https://wildlife.systems>

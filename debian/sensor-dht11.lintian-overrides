@@ -1,8 +1,0 @@
-# We intentionally install to /opt/venvs for virtual environment isolation
-sensor-dht11: dir-or-file-in-opt
-
-# Virtual environment uses /opt/venvs/sensor-dht11/bin/python which is expected
-sensor-dht11: unusual-interpreter
-
-# Python bytecode cache is automatically generated and can be ignored
-sensor-dht11: package-installs-python-pycache-dir

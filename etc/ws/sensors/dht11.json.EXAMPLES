@@ -1,0 +1,54 @@
+Example configurations for reading DHT11
+========================================
+
+The configuration should be placed in /etc/ws/sensors/dht11.json
+
+Basic reading of sensor
+-----------------------
+
+[
+  {
+    "pin": 4,
+    "internal": false
+  }
+]
+
+
+Indicating that the sensor is internal (to the enclosure)
+---------------------------------------------------------
+
+[
+  {
+    "pin": 4,
+    "internal": true
+  }
+]
+
+
+Setting a custom sensor ID
+--------------------------
+
+[
+  {
+    "pin": 4,
+    "internal": true,
+    "sensor_id": "My_Custom_ID"
+  }
+]
+
+
+Setting a custom sensor name
+----------------------------
+
+The sensor_name appears in the "sensor" field of the JSON output.
+Default is "dht11" which produces "dht11_temperature" and "dht11_humidity".
+
+[
+  {
+    "pin": 4,
+    "internal": true,
+    "sensor_name": "enclosure_dht11"
+  }
+]
+
+This produces sensor names like "enclosure_dht11_temperature" and "enclosure_dht11_humidity".
