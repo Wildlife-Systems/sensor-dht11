@@ -65,18 +65,18 @@ run_benchmark() {
     local label="$3"
     local count="$4"
     
-    echo "=============================================="
-    echo "Running $label benchmark ($count iterations)..."
-    echo "=============================================="
+    echo "==============================================" >&2
+    echo "Running $label benchmark ($count iterations)..." >&2
+    echo "==============================================" >&2
     
     # Write CSV header
     echo "iteration,exit_code,real_time_sec,user_time_sec,sys_time_sec" > "$output_file"
     
     local successes=0
     local failures=0
-    local total_real=0
-    local total_user=0
-    local total_sys=0
+    local total_real="0"
+    local total_user="0"
+    local total_sys="0"
     
     for ((i=1; i<=count; i++)); do
         # Use /usr/bin/time for detailed timing (GNU time format)
@@ -89,42 +89,53 @@ run_benchmark() {
         
         # Run command with timing
         if [ "$EUID" -eq 0 ]; then
-            /usr/bin/time -f "%e %U %S" -o "$time_file" "$binary_path" 2>/dev/null || exit_code=$?
+            /usr/bin/time -f "%e %U %S" -o "$time_file" "$binary_path" >/dev/null 2>&1 || exit_code=$?
         else
-            sudo /usr/bin/time -f "%e %U %S" -o "$time_file" "$binary_path" 2>/dev/null || exit_code=$?
+            sudo /usr/bin/time -f "%e %U %S" -o "$time_file" "$binary_path" >/dev/null 2>&1 || exit_code=$?
         fi
         
         # Parse time output
-        read -r real_time user_time sys_time < "$time_file"
+        if [ -f "$time_file" ] && [ -s "$time_file" ]; then
+            read -r real_time user_time sys_time < "$time_file"
+        else
+            real_time="0"
+            user_time="0"
+            sys_time="0"
+        fi
         rm -f "$time_file"
+        
+        # Ensure values are valid numbers
+        real_time="${real_time:-0}"
+        user_time="${user_time:-0}"
+        sys_time="${sys_time:-0}"
         
         # Record result
         echo "$i,$exit_code,$real_time,$user_time,$sys_time" >> "$output_file"
         
         if [ "$exit_code" -eq 0 ]; then
-            ((successes++))
+            ((successes++)) || true
             total_real=$(echo "$total_real + $real_time" | bc)
             total_user=$(echo "$total_user + $user_time" | bc)
             total_sys=$(echo "$total_sys + $sys_time" | bc)
         else
-            ((failures++))
+            ((failures++)) || true
         fi
         
         # Progress indicator every 10 iterations
         if [ $((i % 10)) -eq 0 ]; then
-            echo "  Progress: $i/$count (success: $successes, failed: $failures)"
+            echo "  Progress: $i/$count (success: $successes, failed: $failures)" >&2
         fi
         
         # Short delay between runs to avoid sensor overload
         sleep 0.2
     done
     
-    echo ""
-    echo "$label completed: $successes success, $failures failed"
-    echo "Results saved to: $output_file"
-    echo ""
+    echo "" >&2
+    echo "$label completed: $successes success, $failures failed" >&2
+    echo "Results saved to: $output_file" >&2
+    echo "" >&2
     
-    # Return stats for summary
+    # Return stats for summary (only this goes to stdout for capture)
     echo "$successes $failures $total_real $total_user $total_sys"
 }
 
