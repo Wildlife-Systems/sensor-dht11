@@ -1,4 +1,4 @@
-sensor-dht11 (2.0.3) stable; urgency=medium
+sensor-dht11 (2.0.4) stable; urgency=medium
 
   * Implement enable, setup, mock commands for consistent CLI
 

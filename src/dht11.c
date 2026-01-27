@@ -869,9 +869,6 @@ int main(int argc, char *argv[]) {
             ws_print_version("sensor-dht11", VERSION_STRING);
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "enable") == 0) {
-            /* DHT11 uses kernel IIO driver - overlay must be added to config.txt */
-            printf("DHT11 sensor uses kernel IIO driver.\n");
-            printf("Add 'dtoverlay=dht11,gpiopin=4' to /boot/firmware/config.txt and reboot.\n");
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "setup") == 0) {
             /* DHT11 has no setup requirements beyond the overlay */

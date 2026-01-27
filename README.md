@@ -1,6 +1,6 @@
-# sensor-dht11 (C version)
+# sensor-dht11
 
-A lightweight C implementation for reading DHT11 temperature and humidity sensors on Raspberry Pi using the Linux kernel IIO driver. This replaces the Python version with a native binary that has minimal dependencies and reliable timing.
+A lightweight C implementation for reading DHT11 temperature and humidity sensors on Raspberry Pi. 
 
 ## Building from source
 
@@ -26,14 +26,6 @@ sudo apt install sensor-dht11
 ```
 
 ## Usage
-
-### Enable DHT11 overlay (first-time setup)
-
-```bash
-sensor-dht11 enable
-```
-
-This prints instructions for adding the DHT11 overlay to `/boot/firmware/config.txt`. A reboot is required after making changes.
 
 ### Read sensors
 
@@ -101,22 +93,17 @@ The program outputs JSON in the WildlifeSystems sensor format:
 
 ## How it works
 
-This program uses the Linux kernel's IIO (Industrial I/O) DHT11 driver, which handles all timing-critical bit-banging in kernel space. This is much more reliable than user-space GPIO access.
-
-The kernel driver exposes sensor data via sysfs:
-- `/sys/bus/iio/devices/iio:deviceN/in_temp_input` - Temperature in millidegrees
-- `/sys/bus/iio/devices/iio:deviceN/in_humidityrelative_input` - Humidity in milli-percent
-
-## Requirements
-
-- Raspberry Pi with GPIO
-- Linux kernel with IIO DHT11 driver (included in Raspberry Pi OS)
+This program uses a userspace C implementation to read DHT11 sensors via GPIO using the libgpiod library. All timing-critical bit-banging is handled in userspace, not by the kernel.
 
 ## Exit codes
 
 - `0`: Success
 - `20`: Invalid argument
 - `60`: Identify command
+
+## Documentation
+
+[Performance comparison between C and previous Python versions](https://reports.ebaker.me.uk/WS-sensor-dht11.html)
 
 ## Author
 
