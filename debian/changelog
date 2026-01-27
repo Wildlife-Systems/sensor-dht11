@@ -1,3 +1,9 @@
+sensor-dht11 (2.0.3) stable; urgency=medium
+
+  * Implement enable, setup, mock commands for consistent CLI
+
+ -- Ed Baker <ed@ebaker.me.uk>  Tue, 27 Jan 2026 15:00:00 +0000
+
 sensor-dht11 (2.0.2) stable; urgency=medium
 
   * Rebuild against libwildlifesystems 1.1.1

@@ -30,16 +30,10 @@ sudo apt install sensor-dht11
 ### Enable DHT11 overlay (first-time setup)
 
 ```bash
-sudo sensor-dht11 enable
+sensor-dht11 enable
 ```
 
-This adds the dht11 overlay to `/boot/firmware/config.txt`. A reboot is required.
-
-Optionally specify a different GPIO pin (default is 4):
-
-```bash
-sudo sensor-dht11 enable 17
-```
+This prints instructions for adding the DHT11 overlay to `/boot/firmware/config.txt`. A reboot is required after making changes.
 
 ### Read sensors
 
@@ -47,17 +41,32 @@ sudo sensor-dht11 enable 17
 # Read all sensors (temperature and humidity)
 sensor-dht11
 
+# Read all sensors explicitly
+sensor-dht11 all
+
 # Read only temperature
 sensor-dht11 temperature
 
 # Read only humidity
 sensor-dht11 humidity
 
+# Read only internal sensors
+sensor-dht11 internal
+
+# Read only external sensors
+sensor-dht11 external
+
 # List available sensor types
 sensor-dht11 list
 
 # Identify (exits with code 60)
 sensor-dht11 identify
+
+# Show version
+sensor-dht11 version
+
+# Output mock data for testing
+sensor-dht11 mock
 ```
 
 ## Configuration

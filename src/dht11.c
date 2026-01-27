@@ -868,6 +868,38 @@ int main(int argc, char *argv[]) {
                    strcmp(argv[1], "version") == 0) {
             ws_print_version("sensor-dht11", VERSION_STRING);
             return WS_EXIT_SUCCESS;
+        } else if (strcmp(argv[1], "enable") == 0) {
+            /* DHT11 uses kernel IIO driver - overlay must be added to config.txt */
+            printf("DHT11 sensor uses kernel IIO driver.\n");
+            printf("Add 'dtoverlay=dht11,gpiopin=4' to /boot/firmware/config.txt and reboot.\n");
+            return WS_EXIT_SUCCESS;
+        } else if (strcmp(argv[1], "setup") == 0) {
+            /* DHT11 has no setup requirements beyond the overlay */
+            printf("DHT11 sensor requires no additional setup.\n");
+            return WS_EXIT_SUCCESS;
+        } else if (strcmp(argv[1], "mock") == 0) {
+            /* Output mock data for testing without hardware */
+            char *serial = ws_get_serial_with_suffix("dht11_mock");
+            time_t now = time(NULL);
+            char json[2048];
+            printf("[");
+            /* Temperature */
+            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "temperature", "Celsius",
+                                          serial, "Mock DHT11", false, now) == 0) {
+                ws_sensor_json_set_value(json, 22.0, 1);
+                printf("%s", json);
+            }
+            /* Humidity */
+            char humid_id[128];
+            snprintf(humid_id, sizeof(humid_id), "%s_humidity", serial);
+            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "humidity", "percentage",
+                                          humid_id, "Mock DHT11", false, now) == 0) {
+                ws_sensor_json_set_value(json, 55.0, 1);
+                printf(",%s", json);
+            }
+            printf("]\n");
+            free(serial);
+            return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "temperature") == 0 || 
                    strcmp(argv[1], "humidity") == 0) {
             filter = argv[1];
@@ -877,7 +909,7 @@ int main(int argc, char *argv[]) {
             location_filter = WS_LOCATION_EXTERNAL;
         } else if (strcmp(argv[1], "all") != 0) {
             fprintf(stderr, "Unknown command: %s\n", argv[1]);
-            fprintf(stderr, "Usage: sensor-dht11 [--version|identify|list|temperature|humidity|internal|external|all]\n");
+            fprintf(stderr, "Usage: sensor-dht11 [--version|identify|list|setup|enable|mock|temperature|humidity|internal|external|all]\n");
             return WS_EXIT_INVALID_ARG;
         }
     }
