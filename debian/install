@@ -1,5 +1,3 @@
 etc/ws/sensors/dht11.json /etc/ws/sensors/
 etc/ws/sensors/dht11.json.EXAMPLES /usr/share/doc/sensor-dht11/
 bash-completion/sensor-dht11 /usr/share/bash-completion/completions/
-debian/sensor-dht11.service /lib/systemd/system/
-debian/sensor-dht11.timer /lib/systemd/system/

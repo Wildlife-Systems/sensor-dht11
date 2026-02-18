@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include <sched.h>
 #include <stdbool.h>
 #include <signal.h>
@@ -37,9 +36,6 @@ static struct gpiod_line *g_line = NULL;
 
 /* GPIO chip for Raspberry Pi */
 #define GPIO_CHIP_PATH  "/dev/gpiochip0"
-
-/* Runtime data directory for service mode */
-#define RUN_DIR_BASE    "/run/ws/dht"
 
 /*
  * Get current time in microseconds
@@ -761,57 +757,6 @@ static void build_sensor_json(char *output, size_t output_len,
 }
 
 /*
- * Read a small text file into a buffer, stripping trailing newlines.
- * Returns 0 on success, -1 on error.
- */
-static int read_run_file(const char *path, char *buf, size_t buf_len) {
-    FILE *fp = fopen(path, "r");
-    if (!fp) return -1;
-    size_t n = fread(buf, 1, buf_len - 1, fp);
-    fclose(fp);
-    buf[n] = '\0';
-    /* Strip trailing whitespace/newlines */
-    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r' || buf[n - 1] == ' ')) {
-        buf[--n] = '\0';
-    }
-    return 0;
-}
-
-/*
- * Attempt to load cached sensor data from /run/ws/dht/sensorX/.
- * Populates the reading struct with temperature and humidity if available.
- * Sets read_timestamp from the cached timestamp file.
- * Returns 0 on success (cached data available), -1 if no cache.
- */
-static int load_cached_reading(int sensor_index, sensor_reading_t *reading, time_t *cached_timestamp) {
-    char path[576];
-    char buf[256];
-
-    snprintf(path, sizeof(path), "%s/sensor%d/temperature", RUN_DIR_BASE, sensor_index);
-    if (read_run_file(path, buf, sizeof(buf)) != 0) return -1;
-    reading->temperature = strtof(buf, NULL);
-
-    snprintf(path, sizeof(path), "%s/sensor%d/humidity", RUN_DIR_BASE, sensor_index);
-    if (read_run_file(path, buf, sizeof(buf)) != 0) return -1;
-    reading->humidity = strtof(buf, NULL);
-
-    snprintf(path, sizeof(path), "%s/sensor%d/timestamp", RUN_DIR_BASE, sensor_index);
-    if (read_run_file(path, buf, sizeof(buf)) == 0) {
-        *cached_timestamp = (time_t)strtol(buf, NULL, 10);
-    } else {
-        return -1;  /* No timestamp - cannot verify age, reject */
-    }
-
-    /* Reject cached data older than 10 minutes */
-    if ((time(NULL) - *cached_timestamp) > 600) {
-        return -1;
-    }
-
-    reading->valid = true;
-    return 0;
-}
-
-/*
  * Output sensor reading as JSON
  */
 void output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter) {
@@ -835,9 +780,7 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
             return;
         }
         const char *error_msg = NULL;
-        const char *cached_warning = NULL;
         time_t read_timestamp;
-        char cached_error_buf[256];
         
         /* Skip sensors that don't match the location filter */
         if (location_filter == WS_LOCATION_INTERNAL && !configs[i].internal) {
@@ -855,24 +798,7 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
         read_timestamp = time(NULL);
         
         if (read_dht11(configs[i].pin, &reading) != 0 || !reading.valid) {
-            /* Live read failed - try to use cached data from /run/ws/dht/ */
-            time_t cached_ts = 0;
-            if (load_cached_reading(i, &reading, &cached_ts) == 0) {
-                /* Have cached data - use its timestamp and note the fallback.
-                 * Pass error_msg=NULL to build_sensor_json so the value is
-                 * populated, then inject the warning into the error field. */
-                if (cached_ts > 0) {
-                    read_timestamp = cached_ts;
-                }
-                snprintf(cached_error_buf, sizeof(cached_error_buf),
-                         "live read failed, using cached data from /run/ws/dht/sensor%d", i);
-                cached_warning = cached_error_buf;
-                syslog(LOG_WARNING, "sensor%d: live read failed, serving cached data (age %lds)",
-                       i, (long)(time(NULL) - cached_ts));
-            } else {
-                /* No usable cache either */
-                error_msg = reading.error_msg;
-            }
+            error_msg = reading.error_msg;
         }
         
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
@@ -885,14 +811,6 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                                   "dht11_temperature", "temperature", "Celsius",
                                   reading.temperature, configs[i].internal, sensor_id_temp,
                                   configs[i].sensor_name, error_msg, read_timestamp);
-                
-                /* If serving cached data, inject the warning into the error field
-                 * without nullifying the value */
-                if (cached_warning) {
-                    char quoted_warn[512];
-                    snprintf(quoted_warn, sizeof(quoted_warn), "\"%s\"", cached_warning);
-                    json_replace_field(temp_json, sizeof(temp_json), "error", quoted_warn);
-                }
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(temp_json) + 3;
@@ -920,14 +838,6 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                                   reading.humidity, configs[i].internal, sensor_id_humid,
                                   configs[i].sensor_name, error_msg, read_timestamp);
                 
-                /* If serving cached data, inject the warning into the error field
-                 * without nullifying the value */
-                if (cached_warning) {
-                    char quoted_warn[512];
-                    snprintf(quoted_warn, sizeof(quoted_warn), "\"%s\"", cached_warning);
-                    json_replace_field(humid_json, sizeof(humid_json), "error", quoted_warn);
-                }
-                
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(humid_json) + 3;
                 if (needed > output_size) {
@@ -949,118 +859,6 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
     strcat(output, "]");
     printf("%s\n", output);
     free(output);
-}
-
-/*
- * Ensure a directory path exists, creating parent directories as needed.
- * Returns 0 on success, -1 on error.
- */
-static int mkdirs(const char *path, mode_t mode) {
-    char tmp[512];
-    char *p;
-    size_t len;
-
-    snprintf(tmp, sizeof(tmp), "%s", path);
-    len = strlen(tmp);
-    if (len > 0 && tmp[len - 1] == '/')
-        tmp[len - 1] = '\0';
-
-    for (p = tmp + 1; *p; p++) {
-        if (*p == '/') {
-            *p = '\0';
-            if (mkdir(tmp, mode) != 0 && errno != EEXIST)
-                return -1;
-            *p = '/';
-        }
-    }
-    if (mkdir(tmp, mode) != 0 && errno != EEXIST)
-        return -1;
-    return 0;
-}
-
-/*
- * Write a string to a file, creating/truncating it.
- * Returns 0 on success, -1 on error.
- */
-static int write_file(const char *path, const char *content) {
-    FILE *fp = fopen(path, "w");
-    if (!fp) {
-        log_error("Failed to write %s: %s", path, strerror(errno));
-        return -1;
-    }
-    fputs(content, fp);
-    fclose(fp);
-    return 0;
-}
-
-/*
- * Record sensor readings to /run/ws/dht/sensorX/ files.
- * For each sensor in the config, creates:
- *   /run/ws/dht/sensorX/temperature
- *   /run/ws/dht/sensorX/humidity
- *   /run/ws/dht/sensorX/timestamp
- *   /run/ws/dht/sensorX/sensor_id
- *   /run/ws/dht/sensorX/internal
- *   /run/ws/dht/sensorX/error      (only on read failure)
- */
-static int write_to_run(sensor_config_t *configs, int count) {
-    int i;
-    int errors = 0;
-    char dirpath[512];
-    char filepath[576];
-    char buf[256];
-    time_t now;
-
-    for (i = 0; i < count; i++) {
-        sensor_reading_t reading;
-
-        snprintf(dirpath, sizeof(dirpath), "%s/sensor%d", RUN_DIR_BASE, i);
-        if (mkdirs(dirpath, 0755) != 0) {
-            log_error("Failed to create directory %s: %s", dirpath, strerror(errno));
-            errors++;
-            continue;
-        }
-
-        /* Capture timestamp */
-        now = time(NULL);
-
-        /* Write sensor metadata */
-        snprintf(filepath, sizeof(filepath), "%s/sensor_id", dirpath);
-        write_file(filepath, configs[i].sensor_id ? configs[i].sensor_id : "unknown");
-
-        snprintf(filepath, sizeof(filepath), "%s/internal", dirpath);
-        write_file(filepath, configs[i].internal ? "true" : "false");
-
-        snprintf(filepath, sizeof(filepath), "%s/timestamp", dirpath);
-        snprintf(buf, sizeof(buf), "%ld", (long)now);
-        write_file(filepath, buf);
-
-        /* Attempt to read the sensor */
-        if (read_dht11(configs[i].pin, &reading) == 0 && reading.valid) {
-            snprintf(filepath, sizeof(filepath), "%s/temperature", dirpath);
-            snprintf(buf, sizeof(buf), "%.1f", reading.temperature);
-            write_file(filepath, buf);
-
-            snprintf(filepath, sizeof(filepath), "%s/humidity", dirpath);
-            snprintf(buf, sizeof(buf), "%.1f", reading.humidity);
-            write_file(filepath, buf);
-
-            /* Remove stale error file on success */
-            snprintf(filepath, sizeof(filepath), "%s/error", dirpath);
-            unlink(filepath);
-
-            syslog(LOG_INFO, "sensor%d: temperature=%.1f humidity=%.1f",
-                   i, reading.temperature, reading.humidity);
-        } else {
-            snprintf(filepath, sizeof(filepath), "%s/error", dirpath);
-            write_file(filepath, reading.error_msg[0] ? reading.error_msg : "read failed");
-            log_error("sensor%d: read failed: %s", i,
-                      reading.error_msg[0] ? reading.error_msg : "unknown error");
-            errors++;
-        }
-    }
-
-    return errors > 0 ? -1 : 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -1089,28 +887,6 @@ int main(int argc, char *argv[]) {
                    strcmp(argv[1], "version") == 0) {
             ws_print_version("sensor-dht11", VERSION_STRING);
             return WS_EXIT_SUCCESS;
-        } else if (strcmp(argv[1], "record") == 0) {
-            /* Service mode: read sensors and write to /run/ws/dht/sensorX/ */
-            configs = load_config(CONFIG_PATH, &config_count);
-            if (configs == NULL || config_count == 0) {
-                char *serial = get_serial_number();
-                default_config.pin = DEFAULT_PIN;
-                default_config.internal = false;
-                default_config.sensor_id = serial;
-                default_config.sensor_name = NULL;
-                configs = &default_config;
-                config_count = 1;
-            }
-            int rc = write_to_run(configs, config_count);
-            if (configs == &default_config) {
-                free(default_config.sensor_id);
-                free(default_config.sensor_name);
-            } else {
-                free_config(configs, config_count);
-            }
-            cancel_watchdog();
-            closelog();
-            return rc == 0 ? WS_EXIT_SUCCESS : 1;
         } else if (strcmp(argv[1], "enable") == 0) {
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "setup") == 0) {
@@ -1149,7 +925,7 @@ int main(int argc, char *argv[]) {
             location_filter = WS_LOCATION_EXTERNAL;
         } else if (strcmp(argv[1], "all") != 0) {
             fprintf(stderr, "Unknown command: %s\n", argv[1]);
-            fprintf(stderr, "Usage: sensor-dht11 [--version|identify|list|setup|enable|mock|record|temperature|humidity|internal|external|all]\n");
+            fprintf(stderr, "Usage: sensor-dht11 [--version|identify|list|setup|enable|mock|temperature|humidity|internal|external|all]\n");
             return WS_EXIT_INVALID_ARG;
         }
     }
