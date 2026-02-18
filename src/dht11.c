@@ -768,12 +768,6 @@ static int load_cached_reading(int sensor_index, sensor_reading_t *reading, time
     char path[576];
     char buf[256];
 
-    /* Check that no error file exists - if the cache itself had an error, skip */
-    snprintf(path, sizeof(path), "%s/sensor%d/error", RUN_DIR_BASE, sensor_index);
-    if (access(path, F_OK) == 0) {
-        return -1;  /* Cached data was also an error */
-    }
-
     snprintf(path, sizeof(path), "%s/sensor%d/temperature", RUN_DIR_BASE, sensor_index);
     if (read_run_file(path, buf, sizeof(buf)) != 0) return -1;
     reading->temperature = strtof(buf, NULL);
