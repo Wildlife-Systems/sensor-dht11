@@ -6,5 +6,10 @@ case "$1" in
     configure)
         # Create runtime directory for sensor data (also handled by tmpfiles.d)
         mkdir -p /run/ws/dht
+
+        # Grant real-time scheduling capability for reliable GPIO timing
+        if command -v setcap >/dev/null 2>&1; then
+            setcap cap_sys_nice+ep /usr/bin/sensor-dht11 || true
+        fi
         ;;
 esac

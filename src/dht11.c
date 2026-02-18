@@ -16,6 +16,7 @@
 #include <time.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <signal.h>
 #include <syslog.h>
@@ -374,14 +375,24 @@ static const useconds_t retry_delays_us[] = {
 static const int num_retries = sizeof(retry_delays_us) / sizeof(retry_delays_us[0]);
 
 /*
- * Read DHT11 with retries using predefined backoff schedule
+ * Read DHT11 with retries using predefined backoff schedule.
+ * Elevates to SCHED_FIFO real-time priority during reads for reliable
+ * GPIO timing, then restores normal scheduling afterward.
  */
 int read_dht11(int gpio_pin, sensor_reading_t *reading) {
     uint8_t data[5];
     int attempt;
+    struct sched_param rt_param = { .sched_priority = 99 };
+    struct sched_param normal_param = { .sched_priority = 0 };
+    int had_rt = 0;
     
     reading->valid = false;
     reading->error_msg[0] = '\0';
+    
+    /* Elevate to real-time FIFO scheduling for reliable GPIO timing */
+    if (sched_setscheduler(0, SCHED_FIFO, &rt_param) == 0) {
+        had_rt = 1;
+    }
     
     for (attempt = 0; attempt <= num_retries; attempt++) {
         if (dht11_read_raw(gpio_pin, data, reading->error_msg, sizeof(reading->error_msg)) == 0) {
@@ -394,11 +405,16 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading) {
 #ifdef DEBUG
             fprintf(stderr, "DEBUG: Success on attempt %d\\n", attempt + 1);
 #endif
+            /* Restore normal scheduling */
+            if (had_rt)
+                sched_setscheduler(0, SCHED_OTHER, &normal_param);
             return 0;
         }
         
         /* If we got a permission error, don't retry - it won't help */
         if (reading->error_msg[0] != '\0') {
+            if (had_rt)
+                sched_setscheduler(0, SCHED_OTHER, &normal_param);
             return -1;
         }
         
@@ -417,6 +433,9 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading) {
         snprintf(reading->error_msg, sizeof(reading->error_msg),
                  "Failed to read DHT11 after %d attempts", attempt);
     }
+    /* Restore normal scheduling */
+    if (had_rt)
+        sched_setscheduler(0, SCHED_OTHER, &normal_param);
     return -1;
 }
 
