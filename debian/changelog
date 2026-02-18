@@ -1,3 +1,10 @@
+sensor-dht11 (2.1.0) stable; urgency=medium
+
+  * Add 'record' command to write sensor readings to /run/ws/dht/sensorX/
+  * Add systemd service and timer to read sensors every minute
+
+ -- Ed Baker <ed@ebaker.me.uk>  Wed, 18 Feb 2026 12:00:00 +0000
+
 sensor-dht11 (2.0.4) stable; urgency=medium
 
   * Implement enable, setup, mock commands for consistent CLI

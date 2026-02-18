@@ -39,6 +39,24 @@ Exit with code 60 for sensor identification.
 .TP
 .B all
 Output all sensor readings (default if no command given).
+.TP
+.B record
+Read all configured sensors and write results to
+.I /run/ws/dht/sensorX/
+directories. For each sensor at index X, creates files:
+.I temperature
+(value in Celsius),
+.I humidity
+(value as percentage),
+.I timestamp
+(Unix epoch),
+.I sensor_id
+,
+.I internal
+(true/false), and
+.I error
+(present only on read failure). This command is intended to be called by
+the sensor-dht11 systemd timer.
 .SH CONFIGURATION
 The configuration file
 .I /etc/ws/sensors/dht11.json
@@ -82,6 +100,9 @@ The unit of measurement (e.g., "Celsius", "percentage").
 .TP
 .B value
 The numeric reading value, or null on error.
+When a live read fails but valid cached data exists in
+.IR /run/ws/dht/ ,
+the cached value is returned instead.
 .TP
 .B internal
 Boolean indicating if the sensor is internal.
@@ -94,9 +115,13 @@ Custom sensor name from configuration, or default from sc-prototype.
 .TP
 .B timestamp
 Unix timestamp (seconds since epoch) when the sensor was read.
+When serving cached data, this is the timestamp of the cached reading,
+not the current time.
 .TP
 .B error
-Error message if reading failed, null otherwise.
+Error message if reading failed, null on a successful live read.
+When cached data is served, this field contains a message indicating the
+fallback, e.g. \(lqlive read failed, using cached data from /run/ws/dht/sensor0\(rq.
 .SH FILES
 .TP
 .I /etc/ws/sensors/dht11.json
@@ -104,6 +129,12 @@ Configuration file specifying sensor pin, internal flag, sensor_id, and sensor_n
 .TP
 .I /dev/gpiochip0
 GPIO chip device used for sensor communication.
+.TP
+.I /run/ws/dht/sensorX/
+Runtime directory containing the latest readings from sensor X,
+written by the
+.B record
+command. Files include temperature, humidity, timestamp, sensor_id, internal, and error.
 .SH EXIT STATUS
 .TP
 .B 0
@@ -119,6 +150,27 @@ This program is designed to be used with the \fBsr\fR program (sensor-read) from
 .PP
 A watchdog timer (30 seconds) prevents the program from hanging indefinitely if GPIO
 operations become unresponsive.
+.PP
+A systemd timer
+.RB ( sensor-dht11.timer )
+runs the
+.B record
+command every minute, writing the latest readings to
+.IR /run/ws/dht/ .
+Enable with:
+.B systemctl enable --now sensor-dht11.timer
+.PP
+When a live sensor read fails, the program falls back to the most recent
+cached data written by the
+.B record
+command to
+.IR /run/ws/dht/sensorX/ .
+Cached data is only used if it has a valid timestamp file and is less than
+10 minutes old. When cached data is served, the
+.B error
+field in the JSON output notes the fallback and the
+.B timestamp
+reflects when the cached reading was originally taken.
 .PP
 GPIO pins are validated to be in the range 2-27 (valid Raspberry Pi GPIO pins).
 Invalid pins in the configuration file will be replaced with the default pin (4).

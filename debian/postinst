@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+#DEBHELPER#
+
+case "$1" in
+    configure)
+        # Create runtime directory for sensor data
+        mkdir -p /run/ws/dht
+
+        # Enable and start the timer
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            systemctl enable sensor-dht11.timer || true
+            systemctl start sensor-dht11.timer || true
+        fi
+        ;;
+esac

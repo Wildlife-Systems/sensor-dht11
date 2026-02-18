@@ -48,6 +48,9 @@ sensor-dht11 internal
 # Read only external sensors
 sensor-dht11 external
 
+# Record readings to /run/ws/dht/ (used by the systemd timer)
+sensor-dht11 record
+
 # List available sensor types
 sensor-dht11 list
 
@@ -90,6 +93,28 @@ The program outputs JSON in the WildlifeSystems sensor format:
   {"sensor":"dht11_humidity","measures":"humidity","unit":"percentage","value":45.0,"internal":false,"sensor_id":"1234567890abcdef_dht11_humidity"}
 ]
 ```
+
+## Systemd service
+
+A systemd timer reads all configured sensors every minute and caches the
+results under `/run/ws/dht/sensorX/` (one directory per sensor, with files
+for `temperature`, `humidity`, `timestamp`, `sensor_id`, `internal`, and
+`error`).
+
+```bash
+# Enable and start the timer
+sudo systemctl enable --now sensor-dht11.timer
+
+# Check timer status
+systemctl status sensor-dht11.timer
+
+# Manually trigger a reading
+sudo systemctl start sensor-dht11.service
+```
+
+When a live sensor read fails, `sensor-dht11` automatically falls back to
+the cached data in `/run/ws/dht/` provided it is less than 10 minutes old.
+The `error` field in the JSON output notes when cached data is being served.
 
 ## How it works
 
