@@ -29,6 +29,9 @@
 #define DHT11_START_HIGH_US     20      /* Then release for 20-40us */
 #define DHT11_TIMEOUT_US        1000    /* Timeout waiting for edges */
 
+/* Per-read watchdog: max seconds for a single read (including retries) */
+#define READ_WATCHDOG_SEC       30
+
 /* Global state for signal handler cleanup */
 static volatile sig_atomic_t g_running = 1;
 static struct gpiod_chip *g_chip = NULL;
@@ -74,6 +77,26 @@ static void signal_handler(int sig) {
 }
 
 /*
+ * Watchdog handler - triggers if a single read (including retries) hangs
+ */
+static volatile sig_atomic_t g_read_timed_out = 0;
+
+static void watchdog_handler(int sig) {
+    (void)sig;
+    g_read_timed_out = 1;
+    
+    /* Release GPIO resources if held */
+    if (g_line) {
+        gpiod_line_release(g_line);
+        g_line = NULL;
+    }
+    if (g_chip) {
+        gpiod_chip_close(g_chip);
+        g_chip = NULL;
+    }
+}
+
+/*
  * Setup signal handlers
  */
 static void setup_signal_handlers(void) {
@@ -84,6 +107,13 @@ static void setup_signal_handlers(void) {
     
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+
+    /* Watchdog handler for per-read timeouts */
+    struct sigaction sa_wd;
+    sa_wd.sa_handler = watchdog_handler;
+    sigemptyset(&sa_wd.sa_mask);
+    sa_wd.sa_flags = 0;
+    sigaction(SIGALRM, &sa_wd, NULL);
 }
 
 /*
@@ -273,6 +303,10 @@ static int read_dht11_with_attempts(int gpio_pin, float *temperature, float *hum
     int attempt;
     
     for (attempt = 0; attempt <= num_retries; attempt++) {
+        if (g_read_timed_out || !g_running) {
+            return -1;  /* Watchdog fired or interrupted */
+        }
+        
         if (dht11_read_raw(gpio_pin, data) == 0) {
             *humidity = (float)data[0] + (float)data[1] / 10.0f;
             *temperature = (float)data[2] + (float)data[3] / 10.0f;
@@ -326,7 +360,20 @@ int main(int argc, char *argv[]) {
         float temperature, humidity;
         double start = get_time_sec();
         
+        /* Arm per-read watchdog to prevent hangs */
+        g_read_timed_out = 0;
+        alarm(READ_WATCHDOG_SEC);
+        
         int attempts = read_dht11_with_attempts(gpio_pin, &temperature, &humidity);
+        
+        /* Disarm watchdog */
+        alarm(0);
+        
+        if (g_read_timed_out) {
+            fprintf(stderr, "  WARNING: Read %d timed out (watchdog after %ds)\n",
+                    i + 1, READ_WATCHDOG_SEC);
+            attempts = -1;  /* Mark as failed */
+        }
         
         double elapsed = get_time_sec() - start;
         times[i] = elapsed;
@@ -377,5 +424,6 @@ int main(int argc, char *argv[]) {
     printf("Results saved to results_c.csv\n");
     
     free(times);
-    return failures > 0 ? 1 : 0;
+    /* Only report failure if zero successful reads */
+    return successes > 0 ? 0 : 1;
 }

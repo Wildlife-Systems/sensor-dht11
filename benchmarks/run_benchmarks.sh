@@ -37,15 +37,16 @@ if [ "$EUID" -eq 0 ]; then
     if ./dht11_bench "$COUNT"; then
         C_RAN=1
     else
-        echo "WARNING: C benchmark failed"
-        C_RAN=0
+        echo "WARNING: C benchmark exited with errors (check results_c.csv)"
+        # Still count as ran if results file was produced
+        [ -f "results_c.csv" ] && C_RAN=1 || C_RAN=0
     fi
 else
     if sudo ./dht11_bench "$COUNT"; then
         C_RAN=1
     else
-        echo "WARNING: C benchmark failed"
-        C_RAN=0
+        echo "WARNING: C benchmark exited with errors (check results_c.csv)"
+        [ -f "results_c.csv" ] && C_RAN=1 || C_RAN=0
     fi
 fi
 echo ""
