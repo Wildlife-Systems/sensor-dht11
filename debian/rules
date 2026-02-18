@@ -19,4 +19,4 @@ override_dh_installinit:
 	# Skip default init handling; we use a timer, not a long-running daemon
 
 override_dh_installsystemd:
-	dh_installsystemd --name=sensor-dht11 --no-start sensor-dht11.timer
+	dh_installsystemd --name=sensor-dht11 sensor-dht11.timer
