@@ -822,6 +822,7 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
             return;
         }
         const char *error_msg = NULL;
+        const char *cached_warning = NULL;
         time_t read_timestamp;
         char cached_error_buf[256];
         
@@ -844,13 +845,15 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
             /* Live read failed - try to use cached data from /run/ws/dht/ */
             time_t cached_ts = 0;
             if (load_cached_reading(i, &reading, &cached_ts) == 0) {
-                /* Have cached data - use its timestamp and note the fallback */
+                /* Have cached data - use its timestamp and note the fallback.
+                 * Pass error_msg=NULL to build_sensor_json so the value is
+                 * populated, then inject the warning into the error field. */
                 if (cached_ts > 0) {
                     read_timestamp = cached_ts;
                 }
                 snprintf(cached_error_buf, sizeof(cached_error_buf),
                          "live read failed, using cached data from /run/ws/dht/sensor%d", i);
-                error_msg = cached_error_buf;
+                cached_warning = cached_error_buf;
                 syslog(LOG_WARNING, "sensor%d: live read failed, serving cached data (age %lds)",
                        i, (long)(time(NULL) - cached_ts));
             } else {
@@ -869,6 +872,14 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                                   "dht11_temperature", "temperature", "Celsius",
                                   reading.temperature, configs[i].internal, sensor_id_temp,
                                   configs[i].sensor_name, error_msg, read_timestamp);
+                
+                /* If serving cached data, inject the warning into the error field
+                 * without nullifying the value */
+                if (cached_warning) {
+                    char quoted_warn[512];
+                    snprintf(quoted_warn, sizeof(quoted_warn), "\"%s\"", cached_warning);
+                    json_replace_field(temp_json, sizeof(temp_json), "error", quoted_warn);
+                }
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(temp_json) + 3;
@@ -895,6 +906,14 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                                   "dht11_humidity", "humidity", "percentage",
                                   reading.humidity, configs[i].internal, sensor_id_humid,
                                   configs[i].sensor_name, error_msg, read_timestamp);
+                
+                /* If serving cached data, inject the warning into the error field
+                 * without nullifying the value */
+                if (cached_warning) {
+                    char quoted_warn[512];
+                    snprintf(quoted_warn, sizeof(quoted_warn), "\"%s\"", cached_warning);
+                    json_replace_field(humid_json, sizeof(humid_json), "error", quoted_warn);
+                }
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(humid_json) + 3;
