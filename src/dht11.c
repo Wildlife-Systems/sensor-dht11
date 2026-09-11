@@ -461,26 +461,12 @@ static char *get_serial_number(void) {
 /* json_escape_string is now provided by ws_utils.h as ws_json_escape_string */
 
 /*
- * Count sensor objects in JSON buffer
- */
-static int count_sensors_in_json(const char *buffer) {
-    int count = 0;
-    const char *ptr = buffer;
-    
-    while ((ptr = strchr(ptr, '{')) != NULL) {
-        count++;
-        ptr++;
-    }
-    return count;
-}
-
-/*
  * Parse a simple JSON config file - returns dynamically allocated array
  */
 sensor_config_t *load_config(const char *path, int *count) {
     FILE *fp;
     char *buffer = NULL;
-    char *ptr;
+    const char *ptr;
     int sensor_idx = 0;
     sensor_config_t *configs = NULL;
     int sensor_count;
@@ -515,7 +501,7 @@ sensor_config_t *load_config(const char *path, int *count) {
     fclose(fp);
     
     /* Count sensors and allocate */
-    sensor_count = count_sensors_in_json(buffer);
+    sensor_count = ws_json_count_objects(buffer);
     if (sensor_count == 0) {
         free(buffer);
         return NULL;
@@ -529,7 +515,9 @@ sensor_config_t *load_config(const char *path, int *count) {
     
     ptr = buffer;
     while ((ptr = strchr(ptr, '{')) != NULL && sensor_idx < sensor_count) {
-        char *end = strchr(ptr, '}');
+        /* Matching brace, not the first one: a config entry may contain nested
+           objects or braces inside string values. */
+        const char *end = ws_json_object_end(ptr);
         if (!end) break;
         
         configs[sensor_idx].pin = DEFAULT_PIN;
