@@ -2,8 +2,12 @@
 /sensor-dht11
 *.o
 
+# Cygwin and MinGW gcc append .exe, which a bare binary name does not match
+*.exe
+
 # Test output
 tests/run_tests
+tests/run_tests.exe
 
 # Benchmark output
 benchmarks/results_*.csv
