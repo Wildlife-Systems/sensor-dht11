@@ -1,3 +1,19 @@
+sensor-dht11 (2.2.0) stable; urgency=medium
+
+  * Report device "dht11" and the sensor's configured location
+  * Support "location" in /etc/ws/sensors/dht11.json
+  * Use libwildlifesystems for config parsing instead of a local copy. Fixes
+    sensor_name values being truncated at an escaped quote, and config files
+    being misread when any value contains a brace
+  * Use ws_json_object_end for config object bounds, so a config entry may
+    contain nested objects
+  * Rebuild against libwildlifesystems 1.2.0
+  * Require libwildlifesystems-dev (>= 1.2.0) and sensor-control (>= 1.3.0):
+    an older sc-prototype has no device or location field, and the new
+    values would be dropped silently rather than failing
+
+ -- Ed Baker <ed@ebaker.me.uk>  Fri, 11 Sep 2026 16:00:00 +0100
+
 sensor-dht11 (2.1.0) stable; urgency=medium
 
   * Use SCHED_FIFO real-time scheduling for reliable GPIO reads
