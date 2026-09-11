@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
@@ -44,21 +43,6 @@ static uint64_t micros(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
-}
-
-/*
- * Log error to both stderr and syslog
- */
-static void log_error(const char *fmt, ...) {
-    va_list args;
-    char buf[256];
-    
-    va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-    
-    fprintf(stderr, "%s\n", buf);
-    syslog(LOG_ERR, "%s", buf);
 }
 
 /*
@@ -101,7 +85,7 @@ static void setup_signal_handlers(void) {
  */
 static void watchdog_handler(int sig) {
     (void)sig;
-    log_error("Watchdog timeout - GPIO operations hung");
+    ws_log_error("Watchdog timeout - GPIO operations hung");
     
     /* Release GPIO resources if held */
     if (g_line) {
@@ -175,7 +159,7 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     /* Open GPIO chip */
     chip = gpiod_chip_open(GPIO_CHIP_PATH);
     if (!chip) {
-        log_error("Failed to open GPIO chip %s", GPIO_CHIP_PATH);
+        ws_log_error("Failed to open GPIO chip %s", GPIO_CHIP_PATH);
         fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
         if (error_msg) {
             snprintf(error_msg, error_len, "GPIO access denied - try running with sudo");
@@ -187,7 +171,7 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     /* Get the GPIO line */
     line = gpiod_chip_get_line(chip, gpio_pin);
     if (!line) {
-        log_error("Failed to get GPIO line %d", gpio_pin);
+        ws_log_error("Failed to get GPIO line %d", gpio_pin);
         if (error_msg) {
             snprintf(error_msg, error_len, "Failed to get GPIO line %d", gpio_pin);
         }
@@ -201,7 +185,7 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     
     /* Request line as output, initially high */
     if (gpiod_line_request_output(line, "dht11", 1) < 0) {
-        log_error("Cannot request GPIO %d as output: %s", gpio_pin, strerror(errno));
+        ws_log_error("Cannot request GPIO %d as output: %s", gpio_pin, strerror(errno));
         fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
         if (error_msg) {
             snprintf(error_msg, error_len, "GPIO access denied - try running with sudo");
@@ -221,7 +205,7 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     /* Release line and switch to input */
     gpiod_line_release(line);
     if (gpiod_line_request_input(line, "dht11") < 0) {
-        log_error("Cannot request GPIO %d as input: %s", gpio_pin, strerror(errno));
+        ws_log_error("Cannot request GPIO %d as input: %s", gpio_pin, strerror(errno));
         fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
         if (error_msg) {
             snprintf(error_msg, error_len, "GPIO access denied - try running with sudo");
@@ -435,70 +419,24 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading) {
     return -1;
 }
 
-/*
- * Get Raspberry Pi serial number with _dht11 suffix.
- * Returns dynamically allocated string, caller must free.
- */
-static char *get_serial_number(void) {
-    char *raw_serial = ws_get_serial_number();
-    if (!raw_serial) {
-        return NULL;
-    }
-    
-    /* Allocate space for raw serial + "_dht11" + null */
-    size_t len = strlen(raw_serial) + 7;
-    char *result = malloc(len);
-    if (!result) {
-        free(raw_serial);
-        return NULL;
-    }
-    
-    snprintf(result, len, "%s_dht11", raw_serial);
-    free(raw_serial);
-    return result;
-}
-
 /* json_escape_string is now provided by ws_utils.h as ws_json_escape_string */
 
 /*
  * Parse a simple JSON config file - returns dynamically allocated array
  */
 sensor_config_t *load_config(const char *path, int *count) {
-    FILE *fp;
-    char *buffer = NULL;
+    char *buffer;
     const char *ptr;
     int sensor_idx = 0;
     sensor_config_t *configs = NULL;
     int sensor_count;
-    long file_size;
     
     *count = 0;
     
-    fp = fopen(path, "r");
-    if (!fp) {
-        return NULL;
-    }
-    
-    /* Get file size */
-    fseek(fp, 0, SEEK_END);
-    file_size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    
-    if (file_size <= 0) {
-        fclose(fp);
-        return NULL;
-    }
-    
-    /* Allocate buffer for file contents */
-    buffer = malloc(file_size + 1);
+    buffer = ws_read_file(path, NULL);
     if (!buffer) {
-        fclose(fp);
         return NULL;
     }
-    
-    size_t bytes_read = fread(buffer, 1, file_size, fp);
-    buffer[bytes_read] = '\0';
-    fclose(fp);
     
     /* Count sensors and allocate */
     sensor_count = ws_json_count_objects(buffer);
@@ -520,71 +458,25 @@ sensor_config_t *load_config(const char *path, int *count) {
         const char *end = ws_json_object_end(ptr);
         if (!end) break;
         
-        configs[sensor_idx].pin = DEFAULT_PIN;
-        configs[sensor_idx].internal = false;
-        configs[sensor_idx].sensor_id = NULL;
-        configs[sensor_idx].sensor_name = NULL;
-        
-        char *pin_ptr = strstr(ptr, "\"pin\"");
-        if (pin_ptr && pin_ptr < end) {
-            pin_ptr = strchr(pin_ptr, ':');
-            if (pin_ptr) {
-                int parsed_pin = atoi(pin_ptr + 1);
-                if (ws_validate_gpio_pin(parsed_pin)) {
-                    configs[sensor_idx].pin = parsed_pin;
-                } else {
-                    log_error("Invalid GPIO pin %d (must be 2-27), using default %d",
-                              parsed_pin, DEFAULT_PIN);
-                }
-            }
+        int parsed_pin = ws_json_parse_int(ptr, end, "pin", DEFAULT_PIN);
+        if (ws_validate_gpio_pin(parsed_pin)) {
+            configs[sensor_idx].pin = parsed_pin;
+        } else {
+            ws_log_error("Invalid GPIO pin %d (must be 2-27), using default %d",
+                      parsed_pin, DEFAULT_PIN);
+            configs[sensor_idx].pin = DEFAULT_PIN;
         }
-        
-        char *internal_ptr = strstr(ptr, "\"internal\"");
-        if (internal_ptr && internal_ptr < end) {
-            internal_ptr = strchr(internal_ptr, ':');
-            if (internal_ptr) {
-                while (*internal_ptr == ':' || *internal_ptr == ' ') internal_ptr++;
-                configs[sensor_idx].internal = (strncmp(internal_ptr, "true", 4) == 0);
-            }
-        }
-        
-        char *id_ptr = strstr(ptr, "\"sensor_id\"");
-        if (id_ptr && id_ptr < end) {
-            id_ptr = strchr(id_ptr, ':');
-            if (id_ptr) {
-                char *quote_start = strchr(id_ptr, '"');
-                if (quote_start && quote_start < end) {
-                    quote_start++;
-                    char *quote_end = strchr(quote_start, '"');
-                    if (quote_end && quote_end < end) {
-                        size_t id_len = quote_end - quote_start;
-                        configs[sensor_idx].sensor_id = strndup(quote_start, id_len);
-                    }
-                }
-            }
-        }
-        
+
+        configs[sensor_idx].internal = ws_json_parse_bool(ptr, end, "internal", false);
+        configs[sensor_idx].sensor_id = ws_json_parse_string(ptr, end, "sensor_id");
+        configs[sensor_idx].sensor_name = ws_json_parse_string(ptr, end, "sensor_name");
+        ws_parse_sensor_location(ptr, end, &configs[sensor_idx].location);
+
         /* If no sensor_id in config, use Pi serial with _dht11 suffix */
         if (configs[sensor_idx].sensor_id == NULL) {
-            configs[sensor_idx].sensor_id = get_serial_number();
+            configs[sensor_idx].sensor_id = ws_get_serial_with_suffix("dht11");
         }
-        
-        char *name_ptr = strstr(ptr, "\"sensor_name\"");
-        if (name_ptr && name_ptr < end) {
-            name_ptr = strchr(name_ptr, ':');
-            if (name_ptr) {
-                char *quote_start = strchr(name_ptr, '"');
-                if (quote_start && quote_start < end) {
-                    quote_start++;
-                    char *quote_end = strchr(quote_start, '"');
-                    if (quote_end && quote_end < end) {
-                        size_t name_len = quote_end - quote_start;
-                        configs[sensor_idx].sensor_name = strndup(quote_start, name_len);
-                    }
-                }
-            }
-        }
-        
+
         sensor_idx++;
         ptr = end + 1;
     }
@@ -610,137 +502,29 @@ void free_config(sensor_config_t *configs, int count) {
 /* get_prototype is now provided by ws_utils.h as ws_get_prototype_cached */
 
 /*
- * Replace a JSON field value in a template string (in-place)
- * Looks for "field": and replaces the value after it
- * For string fields, the value should NOT include quotes - they're preserved from original
- */
-static void json_replace_field(char *json, size_t json_len, const char *field, const char *value) {
-    char search[128];
-    char *pos;
-    char *value_start;
-    char *value_end = NULL;
-    size_t new_len, tail_len;
-    size_t prefix_len;
-    
-    snprintf(search, sizeof(search), "\"%s\":", field);
-    pos = strstr(json, search);
-    if (!pos) {
-        snprintf(search, sizeof(search), "\"%s\" :", field);
-        pos = strstr(json, search);
-    }
-    if (!pos) return;
-    
-    /* Find the colon */
-    value_start = strchr(pos, ':');
-    if (!value_start) return;
-    value_start++;
-    
-    /* Skip whitespace */
-    while (*value_start == ' ' || *value_start == '\t') value_start++;
-    
-    /* Find end of value based on type */
-    if (*value_start == '"') {
-        /* String value - keep the quotes, just replace content between them */
-        value_start++;  /* Move past opening quote */
-        value_end = value_start;
-        while (*value_end && *value_end != '"') {
-            if (*value_end == '\\' && *(value_end + 1)) value_end++;
-            value_end++;
-        }
-        /* value_end now points to closing quote - don't include it */
-    } else if (strncmp(value_start, "null", 4) == 0) {
-        value_end = value_start + 4;
-    } else if (strncmp(value_start, "true", 4) == 0) {
-        value_end = value_start + 4;
-    } else if (strncmp(value_start, "false", 5) == 0) {
-        value_end = value_start + 5;
-    } else {
-        /* Number - find comma or closing brace */
-        value_end = value_start;
-        while (*value_end && *value_end != ',' && *value_end != '}') value_end++;
-    }
-    
-    if (!value_end) return;
-    
-    /* Calculate sizes */
-    new_len = strlen(value);
-    prefix_len = value_start - json;
-    tail_len = strlen(value_end) + 1;  /* Include null terminator */
-    
-    /* Check if new string fits */
-    if (prefix_len + new_len + tail_len > json_len) {
-        return;  /* Would overflow */
-    }
-    
-    /* Shift tail in-place, then copy new value */
-    memmove(value_start + new_len, value_end, tail_len);
-    memcpy(value_start, value, new_len);
-}
-
-/*
  * Build a sensor JSON object from the sc-prototype template
- * If error_msg is not NULL, value is set to null and error is populated
- */
-/*
- * Build a sensor JSON object from the sc-prototype template
- * If error_msg is not NULL, value is set to null and error is populated
+ * If error_msg is not NULL, value is left null and error is populated
  * timestamp is the Unix timestamp when the sensor was read
  * sensor_name is the configurable name for the sensor_name field
  */
 static void build_sensor_json(char *output, size_t output_len,
                                const char *sensor, const char *measures, const char *unit,
                                float value, bool internal, const char *sensor_id,
-                               const char *sensor_name, const char *error_msg, time_t timestamp) {
-    const char *prototype = ws_get_prototype_cached();
-    char value_str[32];
-    char quoted[512];
-    char timestamp_str[32];
-    
-    if (!prototype || !*prototype) {
-        log_error("sc-prototype failed - cannot generate JSON");
-        output[0] = '\0';
+                               const char *sensor_name, const char *error_msg, time_t timestamp,
+                               const ws_location_t *location) {
+    if (ws_build_sensor_json_base(output, output_len,
+                                  sensor, "dht11", measures, unit,
+                                  sensor_id, sensor_name,
+                                  internal, location, timestamp) != 0) {
+        ws_log_error("sc-prototype failed - cannot generate JSON");
         return;
     }
     
-    /* Start with a copy of the prototype */
-    strncpy(output, prototype, output_len - 1);
-    output[output_len - 1] = '\0';
-    
-    /* Replace string fields - need to add quotes since prototype has null */
-    snprintf(quoted, sizeof(quoted), "\"%s\"", sensor);
-    json_replace_field(output, output_len, "sensor", quoted);
-    
-    snprintf(quoted, sizeof(quoted), "\"%s\"", measures);
-    json_replace_field(output, output_len, "measures", quoted);
-    
-    snprintf(quoted, sizeof(quoted), "\"%s\"", unit);
-    json_replace_field(output, output_len, "unit", quoted);
-    
-    snprintf(quoted, sizeof(quoted), "\"%s\"", sensor_id);
-    json_replace_field(output, output_len, "sensor_id", quoted);
-    
-    /* Only replace sensor_name if config provides one, otherwise keep prototype default */
-    if (sensor_name && sensor_name[0] != '\0') {
-        snprintf(quoted, sizeof(quoted), "\"%s\"", sensor_name);
-        json_replace_field(output, output_len, "sensor_name", quoted);
-    }
-    
-    json_replace_field(output, output_len, "internal", internal ? "true" : "false");
-    
-    /* Add timestamp */
-    snprintf(timestamp_str, sizeof(timestamp_str), "%ld", (long)timestamp);
-    json_replace_field(output, output_len, "timestamp", timestamp_str);
-    
     if (error_msg) {
-        char escaped_error[256];
-        ws_json_escape_string(error_msg, escaped_error, sizeof(escaped_error));
-        json_replace_field(output, output_len, "value", "null");
-        snprintf(quoted, sizeof(quoted), "\"%s\"", escaped_error);
-        json_replace_field(output, output_len, "error", quoted);
+        /* value stays null; the library escapes the message */
+        ws_sensor_json_set_error(output, error_msg);
     } else {
-        snprintf(value_str, sizeof(value_str), "%.1f", value);
-        json_replace_field(output, output_len, "value", value_str);
-        json_replace_field(output, output_len, "error", "null");
+        ws_sensor_json_set_value(output, (double)value, 1);
     }
 }
 
@@ -790,7 +574,7 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
         }
         
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
-            char temp_json[1024];
+            char temp_json[2048];
             char *sensor_id_temp = malloc(id_len * 2 + 16);
             if (sensor_id_temp) {
                 snprintf(sensor_id_temp, id_len * 2 + 16, "%s_temperature", escaped_id);
@@ -798,7 +582,8 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                 build_sensor_json(temp_json, sizeof(temp_json),
                                   "dht11_temperature", "temperature", "Celsius",
                                   reading.temperature, configs[i].internal, sensor_id_temp,
-                                  configs[i].sensor_name, error_msg, read_timestamp);
+                                  configs[i].sensor_name, error_msg, read_timestamp,
+                                  &configs[i].location);
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(temp_json) + 3;
@@ -816,7 +601,7 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
         }
         
         if (!filter || strcmp(filter, "humidity") == 0 || strcmp(filter, "all") == 0) {
-            char humid_json[1024];
+            char humid_json[2048];
             char *sensor_id_humid = malloc(id_len * 2 + 16);
             if (sensor_id_humid) {
                 snprintf(sensor_id_humid, id_len * 2 + 16, "%s_humidity", escaped_id);
@@ -824,7 +609,8 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                 build_sensor_json(humid_json, sizeof(humid_json),
                                   "dht11_humidity", "humidity", "percentage",
                                   reading.humidity, configs[i].internal, sensor_id_humid,
-                                  configs[i].sensor_name, error_msg, read_timestamp);
+                                  configs[i].sensor_name, error_msg, read_timestamp,
+                                  &configs[i].location);
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(humid_json) + 3;
@@ -857,7 +643,7 @@ int main(int argc, char *argv[]) {
     ws_location_filter_t location_filter = WS_LOCATION_ALL;
     
     /* Initialize syslog */
-    openlog("sensor-dht11", LOG_PID | LOG_CONS, LOG_USER);
+    ws_log_init("sensor-dht11");
     
     /* Setup signal handlers for graceful cleanup */
     setup_signal_handlers();
@@ -888,16 +674,16 @@ int main(int argc, char *argv[]) {
             char json[2048];
             printf("[");
             /* Temperature */
-            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "temperature", "Celsius",
-                                          serial, "Mock DHT11", false, now) == 0) {
+            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "dht11", "temperature", "Celsius",
+                                          serial, "Mock DHT11", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 22.0, 1);
                 printf("%s", json);
             }
             /* Humidity */
             char humid_id[128];
             snprintf(humid_id, sizeof(humid_id), "%s_humidity", serial);
-            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "humidity", "percentage",
-                                          humid_id, "Mock DHT11", false, now) == 0) {
+            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "dht11", "humidity", "percentage",
+                                          humid_id, "Mock DHT11", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 55.0, 1);
                 printf(",%s", json);
             }
@@ -921,7 +707,7 @@ int main(int argc, char *argv[]) {
     configs = load_config(CONFIG_PATH, &config_count);
     if (configs == NULL || config_count == 0) {
         /* Use default config - allocate dynamically for consistency */
-        char *serial = get_serial_number();
+        char *serial = ws_get_serial_with_suffix("dht11");
         default_config.pin = DEFAULT_PIN;
         default_config.internal = false;
         default_config.sensor_id = serial;

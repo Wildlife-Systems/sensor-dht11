@@ -31,6 +31,7 @@ typedef struct {
     bool internal;
     char *sensor_id;    /* Dynamically allocated */
     char *sensor_name;  /* Dynamically allocated, NULL if not set */
+    ws_location_t location;  /* Where the sensor physically sits */
 } sensor_config_t;
 
 /* Sensor reading structure */
