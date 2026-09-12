@@ -535,9 +535,10 @@ static void append_reading(ws_json_array_builder_t *out, const char *escaped_id,
                            const char *measures, const char *unit, float value,
                            const char *error_msg, time_t timestamp) {
     char json[2048];
+    /* An unknown id leaves "sensor_id":null, which records that it is
+       unknown. Dropping the reading instead would report the node as
+       having no sensors, which is worse and silent. */
     char *sensor_id = measurement_id(escaped_id, measures);
-
-    if (!sensor_id) return;
 
     build_sensor_json(json, sizeof(json), sensor, measures, unit, value,
                       config->base.internal, sensor_id, config->base.sensor_name,
@@ -570,15 +571,20 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
         if (location_filter == WS_LOCATION_INTERNAL && !configs[i].base.internal) continue;
         if (location_filter == WS_LOCATION_EXTERNAL && configs[i].base.internal) continue;
 
-        /* Escaping can at most double the length. */
-        id_len = configs[i].base.sensor_id ? strlen(configs[i].base.sensor_id) : 0;
-        escaped_id = malloc(id_len * 2 + 1);
-        if (!escaped_id) {
-            fprintf(stderr, "Memory allocation failed\n");
-            ws_json_array_free(&out);
-            return;
+        /* No sensor_id is reported as null rather than as a fabricated
+           "_temperature": an unknown id must not look like a real one.
+           Escaping can at most double the length. */
+        escaped_id = NULL;
+        if (configs[i].base.sensor_id) {
+            id_len = strlen(configs[i].base.sensor_id);
+            escaped_id = malloc(id_len * 2 + 1);
+            if (!escaped_id) {
+                fprintf(stderr, "Memory allocation failed\n");
+                ws_json_array_free(&out);
+                return;
+            }
+            ws_json_escape_string(configs[i].base.sensor_id, escaped_id, id_len * 2 + 1);
         }
-        ws_json_escape_string(configs[i].base.sensor_id, escaped_id, id_len * 2 + 1);
 
         /* Timestamp when the sensor was read */
         read_timestamp = time(NULL);
@@ -613,6 +619,9 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
 }
 
 int main(int argc, char *argv[]) {
+    /* What this driver measures: the one source for the list command,
+       the measurement filters it accepts, and its usage line. */
+    static const char *measurements[] = {"temperature", "humidity", NULL};
     sensor_config_t *configs = NULL;
     /* Zero-initialised: the default path sets each field explicitly except
        location, which must read as WS_LOC_UNDECLARED rather than whatever
@@ -636,7 +645,6 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[1], "identify") == 0) {
             ws_cmd_identify();
         } else if (strcmp(argv[1], "list") == 0) {
-            static const char *measurements[] = {"temperature", "humidity", NULL};
             ws_cmd_list_multiple(measurements);
         } else if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0 ||
                    strcmp(argv[1], "version") == 0) {
@@ -659,17 +667,14 @@ int main(int argc, char *argv[]) {
             };
             return ws_cmd_mock("dht11", "dht11_mock", "Mock DHT11",
                                mock, sizeof(mock) / sizeof(mock[0]));
-        } else if (strcmp(argv[1], "temperature") == 0 || 
-                   strcmp(argv[1], "humidity") == 0) {
+        } else if (ws_arg_is_measurement(argv[1], measurements)) {
             filter = argv[1];
         } else if (strcmp(argv[1], "internal") == 0) {
             location_filter = WS_LOCATION_INTERNAL;
         } else if (strcmp(argv[1], "external") == 0) {
             location_filter = WS_LOCATION_EXTERNAL;
         } else if (strcmp(argv[1], "all") != 0) {
-            fprintf(stderr, "Unknown command: %s\n", argv[1]);
-            fprintf(stderr, "Usage: sensor-dht11 [--version|identify|list|setup|enable|mock|temperature|humidity|internal|external|all]\n");
-            return WS_EXIT_INVALID_ARG;
+            return ws_cmd_unknown_arg("sensor-dht11", argv[1], measurements);
         }
     }
     
