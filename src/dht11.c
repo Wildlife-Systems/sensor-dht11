@@ -437,6 +437,14 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us)
 /* json_escape_string is now provided by ws_utils.h as ws_json_escape_string */
 
 /*
+ * What tells one DHT11 from another when neither has a configured id: the
+ * pin it is read from. Used by the library's fallback id assignment.
+ */
+static void pin_designation(const void *entry, char *buf, size_t cap) {
+    snprintf(buf, cap, "pin%d", ((const sensor_config_t *)entry)->pin);
+}
+
+/*
  * Parse a simple JSON config file - returns dynamically allocated array
  */
 sensor_config_t *load_config(const char *path, int *count) {
@@ -468,16 +476,20 @@ sensor_config_t *load_config(const char *path, int *count) {
                          parsed_pin, DEFAULT_PIN);
             configs[idx].pin = DEFAULT_PIN;
         }
-
-        /* No sensor_id in the config: fall back to the Pi serial. */
-        if (configs[idx].base.sensor_id == NULL) {
-            configs[idx].base.sensor_id = ws_get_serial_with_suffix("dht11");
-        }
-
         idx++;
     }
 
     ws_config_iter_close(&it);
+
+    /* Entries without a sensor_id get one from the node serial. The library
+       keeps a lone entry at "<serial>_dht11", as the default config has
+       always produced, and tells two or more apart by pin. */
+    if (ws_config_assign_fallback_ids(configs, sizeof(*configs), idx, "dht11",
+                                      pin_designation) < 0) {
+        free_config(configs, idx);
+        return NULL;
+    }
+
     *count = idx;
     return configs;
 }

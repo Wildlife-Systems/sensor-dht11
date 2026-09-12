@@ -51,7 +51,11 @@ GPIO pin number (2-27). Default is 4.
 Boolean indicating if the sensor is inside the enclosure. Default is false.
 .TP
 .B sensor_id
-Custom sensor identifier string. Default is derived from the Raspberry Pi serial number.
+Custom sensor identifier string. If omitted, \fI<serial>_dht11\fR, where
+\fI<serial>\fR is the Raspberry Pi serial number. Where more than one entry
+omits it, each is instead \fI<serial>_dht11_pin<N>\fR, so that two sensors do
+not share an id. Each measurement appends its own name, giving for example
+\fI<serial>_dht11_temperature\fR.
 .TP
 .B sensor_name
 Custom sensor name for the sensor_name field in JSON output. If not specified,
