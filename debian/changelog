@@ -1,5 +1,8 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * "mock" no longer prints "(null)_humidity" where the host has no Pi serial;
+    it falls back to a fixed id, mock being the command meant to work without
+    the hardware
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
