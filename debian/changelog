@@ -1,5 +1,10 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * A reading's timestamp is taken when the value is obtained, not when the
+    attempt begins. A read that retried for several seconds was stamped up to
+    8 s early, and sensor-w1therm stamped at output time, so the field meant
+    different things in different drivers; every driver now stamps after its
+    read
   * Documentation: the man page and README describe setup, enable and mock,
     the location field, and every field of a reading; the examples file no
     longer claims sensor_name changes the "sensor" field, which it never did,
