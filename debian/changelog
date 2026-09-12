@@ -7,7 +7,7 @@ sensor-dht11 (2.4.0) stable; urgency=medium
     killed the driver before it printed anything, and the sensor, along with
     the error explaining its failure, simply vanished from the output. The
     error message now states the attempts made and the budget they had
-* The Makefile honours EXTRA_CFLAGS and EXTRA_LDFLAGS, as sensor-bme680 and
+  * The Makefile honours EXTRA_CFLAGS and EXTRA_LDFLAGS, as sensor-bme680 and
     sensor-w1therm already did. Without them a build from the suite's root
     Makefile linked this driver against the installed libwildlifesystems rather
     than the one it had just built, which, the library being static, silently
