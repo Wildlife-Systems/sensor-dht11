@@ -1,5 +1,11 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Build the output array with the library's JSON array builder instead of
+    realloc and strcat. The old code kept the previous pointer when a realloc
+    failed and then appended regardless, overrunning the buffer; it also
+    re-measured the whole array per reading. The two measurement blocks, which
+    differed only in their arguments, are now one call each
+  * Use the library's WS_UNIT_* constants rather than unit string literals
   * Config parsing moves to the library's ws_config_iter_* and the common
     fields to an embedded ws_sensor_config_base_t, so pin is all this driver
     now declares and parses for itself

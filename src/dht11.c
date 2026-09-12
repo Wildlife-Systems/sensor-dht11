@@ -507,108 +507,109 @@ static void build_sensor_json(char *output, size_t output_len,
 /*
  * Output sensor reading as JSON
  */
+/*
+ * Build "<escaped_id>_<measurement>". Returns NULL if the allocation fails,
+ * in which case the reading is skipped rather than emitted half-formed.
+ */
+static char *measurement_id(const char *escaped_id, const char *measurement) {
+    size_t len;
+    char *out;
+
+    if (!escaped_id) return NULL;
+
+    len = strlen(escaped_id) + strlen(measurement) + 2;  /* '_' and terminator */
+    out = malloc(len);
+    if (!out) return NULL;
+
+    snprintf(out, len, "%s_%s", escaped_id, measurement);
+    return out;
+}
+
+/*
+ * Append one measurement of one sensor to the output array.
+ * The sensor_id suffix is the measurement name, so temperature and humidity
+ * differ only in the arguments.
+ */
+static void append_reading(ws_json_array_builder_t *out, const char *escaped_id,
+                           const sensor_config_t *config, const char *sensor,
+                           const char *measures, const char *unit, float value,
+                           const char *error_msg, time_t timestamp) {
+    char json[2048];
+    char *sensor_id = measurement_id(escaped_id, measures);
+
+    if (!sensor_id) return;
+
+    build_sensor_json(json, sizeof(json), sensor, measures, unit, value,
+                      config->base.internal, sensor_id, config->base.sensor_name,
+                      error_msg, timestamp, &config->base.location);
+    ws_json_array_add(out, json);
+    free(sensor_id);
+}
+
+/*
+ * Output sensor readings as a JSON array
+ */
 void output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter) {
-    size_t output_size = 4096;  /* Initial size, will grow if needed */
-    char *output = malloc(output_size);
-    if (!output) {
+    ws_json_array_builder_t out;
+    const char *json;
+    int i;
+
+    if (ws_json_array_init(&out) != 0) {
         fprintf(stderr, "Memory allocation failed\n");
         return;
     }
-    strcpy(output, "[");
-    int first = 1;
-    int i;
-    
+
     for (i = 0; i < count; i++) {
         sensor_reading_t reading;
-        size_t id_len = configs[i].base.sensor_id ? strlen(configs[i].base.sensor_id) : 0;
-        char *escaped_id = malloc(id_len * 2 + 1);
-        if (!escaped_id) {
-            free(output);
-            fprintf(stderr, "Memory allocation failed\n");
-            return;
-        }
         const char *error_msg = NULL;
         time_t read_timestamp;
-        
-        /* Skip sensors that don't match the location filter */
-        if (location_filter == WS_LOCATION_INTERNAL && !configs[i].base.internal) {
-            free(escaped_id);
-            continue;
+        size_t id_len;
+        char *escaped_id;
+
+        /* Skip sensors that do not match the location filter */
+        if (location_filter == WS_LOCATION_INTERNAL && !configs[i].base.internal) continue;
+        if (location_filter == WS_LOCATION_EXTERNAL && configs[i].base.internal) continue;
+
+        /* Escaping can at most double the length. */
+        id_len = configs[i].base.sensor_id ? strlen(configs[i].base.sensor_id) : 0;
+        escaped_id = malloc(id_len * 2 + 1);
+        if (!escaped_id) {
+            fprintf(stderr, "Memory allocation failed\n");
+            ws_json_array_free(&out);
+            return;
         }
-        if (location_filter == WS_LOCATION_EXTERNAL && configs[i].base.internal) {
-            free(escaped_id);
-            continue;
-        }
-        
         ws_json_escape_string(configs[i].base.sensor_id, escaped_id, id_len * 2 + 1);
-        
-        /* Capture timestamp when sensor is read */
+
+        /* Timestamp when the sensor was read */
         read_timestamp = time(NULL);
-        
+
         if (read_dht11(configs[i].pin, &reading) != 0 || !reading.valid) {
             error_msg = reading.error_msg;
         }
-        
+
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
-            char temp_json[2048];
-            char *sensor_id_temp = malloc(id_len * 2 + 16);
-            if (sensor_id_temp) {
-                snprintf(sensor_id_temp, id_len * 2 + 16, "%s_temperature", escaped_id);
-                
-                build_sensor_json(temp_json, sizeof(temp_json),
-                                  "dht11_temperature", "temperature", "Celsius",
-                                  reading.temperature, configs[i].base.internal, sensor_id_temp,
-                                  configs[i].base.sensor_name, error_msg, read_timestamp,
-                                  &configs[i].base.location);
-                
-                /* Grow output buffer if needed */
-                size_t needed = strlen(output) + strlen(temp_json) + 3;
-                if (needed > output_size) {
-                    output_size = needed * 2;
-                    char *new_output = realloc(output, output_size);
-                    if (new_output) output = new_output;
-                }
-                
-                if (!first) strcat(output, ",");
-                strcat(output, temp_json);
-                first = 0;
-                free(sensor_id_temp);
-            }
+            append_reading(&out, escaped_id, &configs[i], "dht11_temperature",
+                           "temperature", WS_UNIT_CELSIUS, reading.temperature,
+                           error_msg, read_timestamp);
         }
-        
+
         if (!filter || strcmp(filter, "humidity") == 0 || strcmp(filter, "all") == 0) {
-            char humid_json[2048];
-            char *sensor_id_humid = malloc(id_len * 2 + 16);
-            if (sensor_id_humid) {
-                snprintf(sensor_id_humid, id_len * 2 + 16, "%s_humidity", escaped_id);
-                
-                build_sensor_json(humid_json, sizeof(humid_json),
-                                  "dht11_humidity", "humidity", "percentage",
-                                  reading.humidity, configs[i].base.internal, sensor_id_humid,
-                                  configs[i].base.sensor_name, error_msg, read_timestamp,
-                                  &configs[i].base.location);
-                
-                /* Grow output buffer if needed */
-                size_t needed = strlen(output) + strlen(humid_json) + 3;
-                if (needed > output_size) {
-                    output_size = needed * 2;
-                    char *new_output = realloc(output, output_size);
-                    if (new_output) output = new_output;
-                }
-                
-                if (!first) strcat(output, ",");
-                strcat(output, humid_json);
-                first = 0;
-                free(sensor_id_humid);
-            }
+            append_reading(&out, escaped_id, &configs[i], "dht11_humidity",
+                           "humidity", WS_UNIT_PERCENTAGE, reading.humidity,
+                           error_msg, read_timestamp);
         }
-        
+
         free(escaped_id);
     }
-    
-    strcat(output, "]");
-    printf("%s\n", output);
-    free(output);
+
+    ws_json_array_end(&out);
+    json = ws_json_array_get(&out);
+    if (json) {
+        printf("%s\n", json);
+    } else {
+        fprintf(stderr, "Memory allocation failed\n");
+    }
+    ws_json_array_free(&out);
 }
 
 int main(int argc, char *argv[]) {
@@ -658,7 +659,7 @@ int main(int argc, char *argv[]) {
             char json[2048];
             printf("[");
             /* Temperature */
-            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "dht11", "temperature", "Celsius",
+            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "dht11", "temperature", WS_UNIT_CELSIUS,
                                           base, "Mock DHT11", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 22.0, 1);
                 printf("%s", json);
@@ -666,7 +667,7 @@ int main(int argc, char *argv[]) {
             /* Humidity */
             char humid_id[128];
             snprintf(humid_id, sizeof(humid_id), "%s_humidity", base);
-            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "dht11", "humidity", "percentage",
+            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "dht11", "humidity", WS_UNIT_PERCENTAGE,
                                           humid_id, "Mock DHT11", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 55.0, 1);
                 printf(",%s", json);
