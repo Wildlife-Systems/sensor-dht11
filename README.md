@@ -78,7 +78,7 @@ Configuration is read from `/etc/ws/sensors/dht11.json`. Example:
 
 - `pin`: GPIO pin number (2-27)
 - `internal`: Boolean indicating if sensor is inside the enclosure
-- `sensor_id`: Optional custom sensor ID (defaults to Pi serial + "_dht11")
+- `sensor_id`: Optional custom sensor ID. Defaults to `<serial>_dht11`; where more than one entry omits it, to `<serial>_dht11_pin<N>` so that two sensors do not share an id. Each measurement appends its name, e.g. `<serial>_dht11_temperature`
 
 ## Output
 

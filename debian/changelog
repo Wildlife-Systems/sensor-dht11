@@ -1,5 +1,11 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Two config entries without a sensor_id no longer get the same one. Both
+    used to be "<serial>_dht11", so two DHT11s on different pins were merged
+    downstream into one series without a word. A lone entry keeps that id, so
+    no existing node's datastreams move; where more than one entry omits it,
+    each is "<serial>_dht11_pin<N>". Assigned by the library, which also
+    warns about any two entries that still share an id
   * Mock readings declare location "{{node}}", as sensor-onboard's mock
     declares its physical sensors, so every driver's mock has one shape.
     They used to emit location null, which is what an unconfigured sensor
