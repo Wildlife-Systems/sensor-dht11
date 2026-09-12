@@ -645,7 +645,8 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "enable") == 0) {
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "setup") == 0) {
-            /* DHT11 has no setup requirements beyond the overlay */
+            /* Bit-banged over libgpiod, so no device-tree overlay and
+               nothing to set up. */
             printf("DHT11 sensor requires no additional setup.\n");
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "mock") == 0) {

@@ -1,5 +1,8 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Correct a stale comment claiming a device-tree overlay is needed. The
+    readings are bit-banged over libgpiod, so there is nothing to enable and
+    "enable" doing nothing is correct, which the comment implied was an omission
   * Build the output array with the library's JSON array builder instead of
     realloc and strcat. The old code kept the previous pointer when a realloc
     failed and then appended regardless, overrunning the buffer; it also
