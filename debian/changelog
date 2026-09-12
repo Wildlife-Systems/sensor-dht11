@@ -1,5 +1,15 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Fail with nothing printed, exit 20, when sc-prototype is unavailable. The
+    template was checked per reading, after the sensor had been read, and the
+    unbuilt reading was appended anyway: the output was "[,]" with exit 0,
+    which is not JSON. The check now happens once, before the sensor is
+    touched, via the library's ws_require_prototype()
+  * Out of memory while building the array is also exit 20 with no output,
+    rather than exit 0 with no output, which read as success to sr
+  * sensor_id is no longer escaped here before use: libwildlifesystems 1.3.0
+    escapes every string it places in a reading, and doing it here as well
+    would escape twice. sensor_name, which was never escaped, is now
   * A reading whose sensor_id cannot be determined is emitted with
     "sensor_id":null rather than with a fabricated "_temperature", which looked
     like a real identifier and would have collided between nodes

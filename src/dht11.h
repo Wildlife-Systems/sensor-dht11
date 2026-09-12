@@ -44,6 +44,6 @@ typedef struct {
 int read_dht11(int gpio_pin, sensor_reading_t *reading);
 sensor_config_t *load_config(const char *path, int *count);
 void free_config(sensor_config_t *configs, int count);
-void output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter);
+int output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter);
 
 #endif /* DHT11_H */

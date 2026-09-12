@@ -486,42 +486,42 @@ void free_config(sensor_config_t *configs, int count) {
  * If error_msg is not NULL, value is left null and error is populated
  * timestamp is the Unix timestamp when the sensor was read
  * sensor_name is the configurable name for the sensor_name field
+ * Returns 0 on success, -1 if the reading could not be built.
  */
-static void build_sensor_json(char *output, size_t output_len,
-                               const char *sensor, const char *measures, const char *unit,
-                               float value, bool internal, const char *sensor_id,
-                               const char *sensor_name, const char *error_msg, time_t timestamp,
-                               const ws_location_t *location) {
+static int build_sensor_json(char *output, size_t output_len,
+                             const char *sensor, const char *measures, const char *unit,
+                             float value, bool internal, const char *sensor_id,
+                             const char *sensor_name, const char *error_msg, time_t timestamp,
+                             const ws_location_t *location) {
+    /* The strings go in raw: the library escapes them. */
     if (ws_build_sensor_json_base(output, output_len,
                                   sensor, "dht11", measures, unit,
                                   sensor_id, sensor_name,
                                   internal, location, timestamp) != 0) {
-        ws_log_error("sc-prototype failed - cannot generate JSON");
-        return;
+        ws_log_error("Could not build reading for %s", sensor);
+        return -1;
     }
-    
+
     /* Exactly one of value or error; the library escapes the message. */
     ws_sensor_json_set_result(output, output_len, (double)value, 1, error_msg);
+    return 0;
 }
 
 /*
- * Output sensor reading as JSON
+ * Build "<sensor_id>_<measurement>". Returns NULL if the id is unknown or the
+ * allocation fails; the caller then emits the reading with a null sensor_id.
  */
-/*
- * Build "<escaped_id>_<measurement>". Returns NULL if the allocation fails,
- * in which case the reading is skipped rather than emitted half-formed.
- */
-static char *measurement_id(const char *escaped_id, const char *measurement) {
+static char *measurement_id(const char *sensor_id, const char *measurement) {
     size_t len;
     char *out;
 
-    if (!escaped_id) return NULL;
+    if (!sensor_id) return NULL;
 
-    len = strlen(escaped_id) + strlen(measurement) + 2;  /* '_' and terminator */
+    len = strlen(sensor_id) + strlen(measurement) + 2;  /* '_' and terminator */
     out = malloc(len);
     if (!out) return NULL;
 
-    snprintf(out, len, "%s_%s", escaped_id, measurement);
+    snprintf(out, len, "%s_%s", sensor_id, measurement);
     return out;
 }
 
@@ -530,61 +530,49 @@ static char *measurement_id(const char *escaped_id, const char *measurement) {
  * The sensor_id suffix is the measurement name, so temperature and humidity
  * differ only in the arguments.
  */
-static void append_reading(ws_json_array_builder_t *out, const char *escaped_id,
-                           const sensor_config_t *config, const char *sensor,
-                           const char *measures, const char *unit, float value,
-                           const char *error_msg, time_t timestamp) {
+static void append_reading(ws_json_array_builder_t *out, const sensor_config_t *config,
+                           const char *sensor, const char *measures, const char *unit,
+                           float value, const char *error_msg, time_t timestamp) {
     char json[2048];
     /* An unknown id leaves "sensor_id":null, which records that it is
        unknown. Dropping the reading instead would report the node as
        having no sensors, which is worse and silent. */
-    char *sensor_id = measurement_id(escaped_id, measures);
+    char *sensor_id = measurement_id(config->base.sensor_id, measures);
 
-    build_sensor_json(json, sizeof(json), sensor, measures, unit, value,
-                      config->base.internal, sensor_id, config->base.sensor_name,
-                      error_msg, timestamp, &config->base.location);
-    ws_json_array_add(out, json);
+    /* A reading that could not be built is not added: the array would
+       refuse the empty item anyway, and fail as a whole. */
+    if (build_sensor_json(json, sizeof(json), sensor, measures, unit, value,
+                          config->base.internal, sensor_id, config->base.sensor_name,
+                          error_msg, timestamp, &config->base.location) == 0) {
+        ws_json_array_add(out, json);
+    }
     free(sensor_id);
 }
 
 /*
- * Output sensor readings as a JSON array
+ * Output sensor readings as a JSON array.
+ * Returns WS_EXIT_SUCCESS, or WS_EXIT_INVALID_ARG with nothing printed if the
+ * array could not be built: no output means "could not report", where "[]"
+ * would mean "no sensors".
  */
-void output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter) {
+int output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter) {
     ws_json_array_builder_t out;
     const char *json;
     int i;
 
     if (ws_json_array_init(&out) != 0) {
-        fprintf(stderr, "Memory allocation failed\n");
-        return;
+        ws_log_error("Out of memory building readings");
+        return WS_EXIT_INVALID_ARG;
     }
 
     for (i = 0; i < count; i++) {
         sensor_reading_t reading;
         const char *error_msg = NULL;
         time_t read_timestamp;
-        size_t id_len;
-        char *escaped_id;
 
         /* Skip sensors that do not match the location filter */
         if (location_filter == WS_LOCATION_INTERNAL && !configs[i].base.internal) continue;
         if (location_filter == WS_LOCATION_EXTERNAL && configs[i].base.internal) continue;
-
-        /* No sensor_id is reported as null rather than as a fabricated
-           "_temperature": an unknown id must not look like a real one.
-           Escaping can at most double the length. */
-        escaped_id = NULL;
-        if (configs[i].base.sensor_id) {
-            id_len = strlen(configs[i].base.sensor_id);
-            escaped_id = malloc(id_len * 2 + 1);
-            if (!escaped_id) {
-                fprintf(stderr, "Memory allocation failed\n");
-                ws_json_array_free(&out);
-                return;
-            }
-            ws_json_escape_string(configs[i].base.sensor_id, escaped_id, id_len * 2 + 1);
-        }
 
         /* Timestamp when the sensor was read */
         read_timestamp = time(NULL);
@@ -594,28 +582,29 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
         }
 
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
-            append_reading(&out, escaped_id, &configs[i], "dht11_temperature",
+            append_reading(&out, &configs[i], "dht11_temperature",
                            "temperature", WS_UNIT_CELSIUS, reading.temperature,
                            error_msg, read_timestamp);
         }
 
         if (!filter || strcmp(filter, "humidity") == 0 || strcmp(filter, "all") == 0) {
-            append_reading(&out, escaped_id, &configs[i], "dht11_humidity",
+            append_reading(&out, &configs[i], "dht11_humidity",
                            "humidity", WS_UNIT_PERCENTAGE, reading.humidity,
                            error_msg, read_timestamp);
         }
-
-        free(escaped_id);
     }
 
     ws_json_array_end(&out);
     json = ws_json_array_get(&out);
-    if (json) {
-        printf("%s\n", json);
-    } else {
-        fprintf(stderr, "Memory allocation failed\n");
+    if (!json) {
+        ws_log_error("Out of memory building readings");
+        ws_json_array_free(&out);
+        return WS_EXIT_INVALID_ARG;
     }
+
+    printf("%s\n", json);
     ws_json_array_free(&out);
+    return WS_EXIT_SUCCESS;
 }
 
 int main(int argc, char *argv[]) {
@@ -631,7 +620,8 @@ int main(int argc, char *argv[]) {
     int config_count = 0;
     const char *filter = NULL;
     ws_location_filter_t location_filter = WS_LOCATION_ALL;
-    
+    int status;
+
     /* Initialize syslog */
     ws_log_init("sensor-dht11");
     
@@ -677,7 +667,17 @@ int main(int argc, char *argv[]) {
             return ws_cmd_unknown_arg("sensor-dht11", argv[1], measurements);
         }
     }
-    
+
+    /* Every reading needs the template, so ask once before touching the
+       sensor. Without it, fail with nothing printed: "[]" would claim the
+       node has no sensors, and a partial array is not JSON at all. */
+    status = ws_require_prototype();
+    if (status != 0) {
+        cancel_watchdog();
+        closelog();
+        return status;
+    }
+
     configs = load_config(CONFIG_PATH, &config_count);
     if (configs == NULL || config_count == 0) {
         /* Use default config - allocate dynamically for consistency */
@@ -690,8 +690,8 @@ int main(int argc, char *argv[]) {
         config_count = 1;
     }
     
-    output_json(configs, config_count, filter, location_filter);
-    
+    status = output_json(configs, config_count, filter, location_filter);
+
     /* Free config */
     if (configs == &default_config) {
         /* Free just the strings from stack-allocated default */
@@ -700,10 +700,10 @@ int main(int argc, char *argv[]) {
     } else {
         free_config(configs, config_count);
     }
-    
+
     /* Cancel watchdog before normal exit */
     cancel_watchdog();
-    
+
     closelog();
-    return WS_EXIT_SUCCESS;
+    return status;
 }
