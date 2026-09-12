@@ -389,7 +389,7 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us)
     for (attempt = 0; attempt <= num_retries; attempt++) {
         attempts_made = attempt + 1;
         if (dht11_read_raw(gpio_pin, data, reading->error_msg, sizeof(reading->error_msg)) == 0) {
-/* DHT11 format: data[0]=humidity int, data[1]=humidity dec (always 0)
+            /* DHT11 format: data[0]=humidity int, data[1]=humidity dec (always 0)
              *               data[2]=temp int, data[3]=temp dec (always 0)
              *               data[4]=checksum */
             reading->humidity = (float)data[0] + (float)data[1] / 10.0f;
@@ -428,7 +428,7 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us)
                  "Failed to read DHT11 after %d attempts in %.1f s",
                  attempts_made, (double)budget_us / 1e6);
     }
-/* Restore normal scheduling */
+    /* Restore normal scheduling */
     if (had_rt)
         sched_setscheduler(0, SCHED_OTHER, &normal_param);
     return -1;
@@ -613,7 +613,7 @@ int output_json(sensor_config_t *configs, int count, const char *filter, ws_loca
         read_timestamp = time(NULL);
 
         if (read_dht11(configs[i].pin, &reading, budget_us) != 0 || !reading.valid) {
-error_msg = reading.error_msg;
+            error_msg = reading.error_msg;
         }
 
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
