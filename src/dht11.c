@@ -345,7 +345,9 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     return 0;
 }
 
-/* Retry delays in microseconds: 0.05s x2, 0.1s x3, then 0.2, 0.4, 0.8, 1.6, 2s x3 */
+/* Retry delays in microseconds: 0.05s x2, 0.1s x3, then 0.2, 0.4, 0.8, 1.6, 2s x3.
+ * The full schedule sleeps for 9.4 s, which on its own exceeds the 10 s sr
+ * allows a driver; it is walked only as far as the caller's budget permits. */
 static const useconds_t retry_delays_us[] = {
     50000, 50000,             /* 0.05s x2 */
     100000, 100000, 100000,   /* 0.1s x3 */
@@ -355,28 +357,39 @@ static const useconds_t retry_delays_us[] = {
 static const int num_retries = sizeof(retry_delays_us) / sizeof(retry_delays_us[0]);
 
 /*
- * Read DHT11 with retries using predefined backoff schedule.
+ * Read DHT11 with retries using predefined backoff schedule, within a budget.
+ *
+ * A retry whose delay would run past the budget is not attempted, so the
+ * call returns, with an error if need be, inside budget_us from when it was
+ * made. Without this a failing sensor was retried for longer than sr waits,
+ * and sr killed the driver before it could report the failure: the sensor
+ * simply vanished from the output, which is the one thing a failure report
+ * exists to prevent.
+ *
  * Elevates to SCHED_FIFO real-time priority during reads for reliable
  * GPIO timing, then restores normal scheduling afterward.
  */
-int read_dht11(int gpio_pin, sensor_reading_t *reading) {
+int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us) {
     uint8_t data[5];
     int attempt;
+    int attempts_made = 0;
+    uint64_t deadline = micros() + budget_us;
     struct sched_param rt_param = { .sched_priority = 99 };
     struct sched_param normal_param = { .sched_priority = 0 };
     int had_rt = 0;
-    
+
     reading->valid = false;
     reading->error_msg[0] = '\0';
-    
+
     /* Elevate to real-time FIFO scheduling for reliable GPIO timing */
     if (sched_setscheduler(0, SCHED_FIFO, &rt_param) == 0) {
         had_rt = 1;
     }
-    
+
     for (attempt = 0; attempt <= num_retries; attempt++) {
+        attempts_made = attempt + 1;
         if (dht11_read_raw(gpio_pin, data, reading->error_msg, sizeof(reading->error_msg)) == 0) {
-            /* DHT11 format: data[0]=humidity int, data[1]=humidity dec (always 0)
+/* DHT11 format: data[0]=humidity int, data[1]=humidity dec (always 0)
              *               data[2]=temp int, data[3]=temp dec (always 0)
              *               data[4]=checksum */
             reading->humidity = (float)data[0] + (float)data[1] / 10.0f;
@@ -401,19 +414,21 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading) {
 #ifdef DEBUG
         fprintf(stderr, "DEBUG: Attempt %d failed\\n", attempt + 1);
 #endif
-        
-        /* Wait before next attempt (if not the last) */
-        if (attempt < num_retries) {
-            usleep(retry_delays_us[attempt]);
-        }
+
+        /* Wait before the next attempt, unless the schedule is exhausted or
+           the wait would carry us past the budget. */
+        if (attempt >= num_retries) break;
+        if (micros() + retry_delays_us[attempt] > deadline) break;
+        usleep(retry_delays_us[attempt]);
     }
-    
+
     /* Only set generic error if no specific error was set */
     if (reading->error_msg[0] == '\0') {
         snprintf(reading->error_msg, sizeof(reading->error_msg),
-                 "Failed to read DHT11 after %d attempts", attempt);
+                 "Failed to read DHT11 after %d attempts in %.1f s",
+                 attempts_made, (double)budget_us / 1e6);
     }
-    /* Restore normal scheduling */
+/* Restore normal scheduling */
     if (had_rt)
         sched_setscheduler(0, SCHED_OTHER, &normal_param);
     return -1;
@@ -555,9 +570,20 @@ static void append_reading(ws_json_array_builder_t *out, const sensor_config_t *
  * array could not be built: no output means "could not report", where "[]"
  * would mean "no sensors".
  */
+/*
+ * Does this sensor pass the location filter?
+ */
+static bool selected(const sensor_config_t *config, ws_location_filter_t location_filter) {
+    if (location_filter == WS_LOCATION_INTERNAL && !config->base.internal) return false;
+    if (location_filter == WS_LOCATION_EXTERNAL && config->base.internal) return false;
+    return true;
+}
+
 int output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter) {
     ws_json_array_builder_t out;
     const char *json;
+    unsigned long budget_us = 0;
+    int selected_count = 0;
     int i;
 
     if (ws_json_array_init(&out) != 0) {
@@ -565,20 +591,29 @@ int output_json(sensor_config_t *configs, int count, const char *filter, ws_loca
         return WS_EXIT_INVALID_ARG;
     }
 
+    /* The read budget is for the whole invocation, so it is shared equally
+       between the sensors that will actually be read. Two failing sensors
+       then take the same wall time as one, rather than twice it, and the
+       driver finishes inside sr's window however many are configured. */
+    for (i = 0; i < count; i++) {
+        if (selected(&configs[i], location_filter)) selected_count++;
+    }
+    if (selected_count > 0) {
+        budget_us = (DHT11_READ_BUDGET_SEC * 1000000UL) / (unsigned long)selected_count;
+    }
+
     for (i = 0; i < count; i++) {
         sensor_reading_t reading;
         const char *error_msg = NULL;
         time_t read_timestamp;
 
-        /* Skip sensors that do not match the location filter */
-        if (location_filter == WS_LOCATION_INTERNAL && !configs[i].base.internal) continue;
-        if (location_filter == WS_LOCATION_EXTERNAL && configs[i].base.internal) continue;
+        if (!selected(&configs[i], location_filter)) continue;
 
         /* Timestamp when the sensor was read */
         read_timestamp = time(NULL);
 
-        if (read_dht11(configs[i].pin, &reading) != 0 || !reading.valid) {
-            error_msg = reading.error_msg;
+        if (read_dht11(configs[i].pin, &reading, budget_us) != 0 || !reading.valid) {
+error_msg = reading.error_msg;
         }
 
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
