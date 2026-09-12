@@ -1,0 +1,15 @@
+[
+  {
+    "pin": 4,
+    "internal": true,
+    "sensor_name": "Enclosure DHT11",
+    "location": "{{node}}"
+  },
+  {
+    "pin": 17,
+    "internal": false,
+    "sensor_id": "shelter_dht11",
+    "sensor_name": "Stevenson screen",
+    "location": { "latitude": 51.4967, "longitude": -0.1764, "altitude": 12.0, "accuracy": 5.0 }
+  }
+]

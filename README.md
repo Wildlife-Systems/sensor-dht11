@@ -100,7 +100,9 @@ single sensor on GPIO 4 is read.
   and `accuracy` in metres. If omitted, the `location` field of the reading is
   null.
 
-Further examples are given in `/usr/share/doc/sensor-dht11/dht11.json.EXAMPLES`.
+An example showing every option in use is installed as
+`/usr/share/doc/sensor-dht11/examples/dht11.json`; it is valid JSON and can be
+copied into place and edited.
 
 ## Output
 

@@ -1,5 +1,10 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * The example configuration is a plain JSON file, examples/dht11.json,
+    installed under /usr/share/doc/sensor-dht11/examples/ as the other drivers'
+    are, and usable as it stands. It replaces a prose document with snippets
+    that could not be copied into place; the option-by-option explanation is
+    in the man page
   * A reading's timestamp is taken when the value is obtained, not when the
     attempt begins. A read that retried for several seconds was stamped up to
     8 s early, and sensor-w1therm stamped at output time, so the field meant
