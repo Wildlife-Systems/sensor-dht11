@@ -1,5 +1,15 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Packaging: depend on libcap2-bin, so the cap_sys_nice capability the
+    postinst sets and the man page promises is actually set rather than
+    skipped where setcap is absent; move from Section contrib/misc, the area
+    for packages needing non-free software, to misc; Standards-Version 4.6.1;
+    the lintian override for our "stable" distribution, as libwildlifesystems
+    already had
+  * The shipped /etc/ws/sensors/dht11.json says "internal": false, as the man
+    page, README and examples all say the default is; it said true
+  * "make install" defaults to PREFIX=/usr rather than /usr/local, since sr
+    finds drivers in /usr/bin only and a hand install elsewhere was invisible
   * The default configuration, used when there is no config file, is built
     by load_config on the heap like a parsed one, so there is one free path
     rather than a stack special case; the measurement id and the location

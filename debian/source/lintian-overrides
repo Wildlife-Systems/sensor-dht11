@@ -1,0 +1,2 @@
+# We use "stable" for our own APT repository
+sensor-dht11 source: bad-distribution-in-changes-file stable
