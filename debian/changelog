@@ -1,5 +1,10 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * The Makefile honours EXTRA_CFLAGS and EXTRA_LDFLAGS, as sensor-bme680 and
+    sensor-w1therm already did. Without them a build from the suite's root
+    Makefile linked this driver against the installed libwildlifesystems rather
+    than the one it had just built, which, the library being static, silently
+    baked the old behaviour into a binary carrying the new version number
   * Fail with nothing printed, exit 20, when sc-prototype is unavailable. The
     template was checked per reading, after the sensor had been read, and the
     unbuilt reading was appended anyway: the output was "[,]" with exit 0,

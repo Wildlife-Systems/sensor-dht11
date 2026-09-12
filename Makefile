@@ -5,8 +5,11 @@
 VERSION := $(shell head -n1 debian/changelog | sed 's/.*(//' | sed 's/).*//')
 
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -std=c99 -I/usr/include/ws -DVERSION=\"$(VERSION)\"
-LDFLAGS = -lgpiod -lwildlifesystems
+# EXTRA_CFLAGS / EXTRA_LDFLAGS come first so a caller's -I and -L win over the
+# installed library: the root Makefile uses them to build against the
+# libwildlifesystems it has just built rather than whatever is in /usr.
+CFLAGS = $(EXTRA_CFLAGS) -Wall -Wextra -O2 -std=c99 -I/usr/include/ws -DVERSION=\"$(VERSION)\"
+LDFLAGS = $(EXTRA_LDFLAGS) -lgpiod -lwildlifesystems
 
 PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
