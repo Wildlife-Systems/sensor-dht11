@@ -1,5 +1,9 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Documentation: the man page and README describe setup, enable and mock,
+    the location field, and every field of a reading; the examples file no
+    longer claims sensor_name changes the "sensor" field, which it never did,
+    and shows location. Man page header brought up to this version
   * Packaging: depend on libcap2-bin, so the cap_sys_nice capability the
     postinst sets and the man page promises is actually set rather than
     skipped where setcap is absent; move from Section contrib/misc, the area

@@ -1,110 +1,129 @@
-.TH SENSOR-DHT11 1 "January 2026" "sensor-dht11 2.1.0" "Wildlife Systems"
+.TH SENSOR-DHT11 1 "September 2026" "sensor-dht11 2.4.0" "WildlifeSystems"
 .SH NAME
-sensor-dht11 \- read DHT11 sensors attached to a WildlifeSystems node
+sensor-dht11 \- read DHT11 temperature and humidity sensors
 .SH SYNOPSIS
 .B sensor-dht11
-.RI [ command ]
+[\fB\-\-version\fR|\fB\-v\fR|\fBversion\fR|\fBidentify\fR|\fBlist\fR|\fBsetup\fR|\fBenable\fR|\fBmock\fR|\fBtemperature\fR|\fBhumidity\fR|\fBinternal\fR|\fBexternal\fR|\fBall\fR]
 .SH DESCRIPTION
 .B sensor-dht11
-reads temperature and humidity data from DHT11 sensors attached to the Raspberry Pi
-using libgpiod for GPIO bit-banging.
-.PP
-This is a lightweight C implementation that outputs sensor readings in JSON format
-compatible with WildlifeSystems. Each reading includes a Unix timestamp indicating
-when the sensor was read.
+reads DHT11 temperature and humidity sensors connected to the GPIO pins of a
+Raspberry Pi, using libgpiod, and outputs the readings as a JSON array in the
+WildlifeSystems format, one reading per measurement. It is normally run by
+.BR sr (1).
 .SH COMMANDS
+Not specifying a command is equivalent to \fBall\fR.
 .TP
 .B \-\-version, \-v, version
-Print version information and exit.
-.TP
-.B temperature
-Output only temperature readings.
-.TP
-.B humidity
-Output only humidity readings.
-.TP
-.B internal
-Output only readings from sensors marked as internal in the configuration.
-Only runs sensors that are configured with "internal": true.
-.TP
-.B external
-Output only readings from sensors marked as external in the configuration.
-Only runs sensors that are configured with "internal": false.
-.TP
-.B list
-List available sensor types (temperature, humidity).
+Print the version and exit.
 .TP
 .B identify
-Exit with code 60 for sensor identification.
+Exit with code 60, identifying the program as a WildlifeSystems sensor driver.
+.TP
+.B list
+List the measurements provided, one per line: temperature and humidity. Each
+is also accepted as a command.
+.TP
+.B temperature, humidity
+Output only that measurement from every sensor.
+.TP
+.B setup, enable
+Report that nothing is required. The sensor is read by bit-banging a GPIO pin,
+so no kernel interface has to be enabled. The commands are provided so that
+every driver answers the same commands.
+.TP
+.B mock
+Output fixed readings in the real output format, for testing without hardware:
+22.0\[de]C and 55% humidity, at location \fI{{node}}\fR.
+.TP
+.B internal
+Output only readings from sensors configured as internal.
+.TP
+.B external
+Output only readings from sensors configured as external.
 .TP
 .B all
-Output all sensor readings (default if no command given).
+Output every measurement from every sensor.
 .SH CONFIGURATION
 The configuration file
 .I /etc/ws/sensors/dht11.json
-is a JSON array of sensor objects. Each sensor object supports the following fields:
+is a JSON array with one object per sensor. Without the file, a single sensor
+on GPIO 4 is read. Each object may contain the following fields.
 .TP
 .B pin
-GPIO pin number (2-27). Default is 4.
+The GPIO pin number, 2 to 27. The default is 4. An invalid pin number is
+replaced by the default.
 .TP
 .B internal
-Boolean indicating if the sensor is inside the enclosure. Default is false.
+Whether the sensor is inside the enclosure. The default is false.
 .TP
 .B sensor_id
-Custom sensor identifier string. If omitted, \fI<serial>_dht11\fR, where
-\fI<serial>\fR is the Raspberry Pi serial number. Where more than one entry
-omits it, each is instead \fI<serial>_dht11_pin<N>\fR, so that two sensors do
-not share an id. Each measurement appends its own name, giving for example
+A custom sensor identifier. If omitted, the identifier is
+\fI<serial>_dht11\fR, where \fI<serial>\fR is the Raspberry Pi serial number.
+Where more than one entry omits it, each is instead
+\fI<serial>_dht11_pin<N>\fR, so that two sensors do not share an identifier.
+Each measurement appends its own name, giving for example
 \fI<serial>_dht11_temperature\fR.
 .TP
 .B sensor_name
-Custom sensor name for the sensor_name field in JSON output. If not specified,
-the default from sc-prototype is used.
+A human-readable name, reported in the \fBsensor_name\fR field.
+.TP
+.B location
+Where the sensor is: the string \fI{{node}}\fR for the position of the node,
+\fI{{none}}\fR for a sensor that has no position, or an object with
+\fBlatitude\fR and \fBlongitude\fR in decimal degrees and, optionally,
+\fBaltitude\fR and \fBaccuracy\fR in metres. If omitted, the \fBlocation\fR
+field of the reading is null.
 .PP
-Example configuration:
+An example configuration:
 .PP
 .nf
 [
   {
     "pin": 4,
     "internal": true,
-    "sensor_name": "enclosure_dht11"
+    "sensor_name": "Enclosure DHT11",
+    "location": "{{node}}"
   }
 ]
 .fi
-.SH OUTPUT FORMAT
-The program outputs a JSON array of sensor readings. Each reading includes:
+.SH OUTPUT
+A JSON array with one reading per measurement of each sensor. Each reading has
+the fields of the
+.BR sc-prototype (1)
+template. The fields filled in by this driver are as follows.
 .TP
 .B sensor
-The sensor type (always "dht11_temperature" or "dht11_humidity").
+"dht11_temperature" or "dht11_humidity".
+.TP
+.B device
+"dht11".
 .TP
 .B measures
-What is being measured (e.g., "temperature", "humidity").
+"temperature" or "humidity".
 .TP
 .B unit
-The unit of measurement (e.g., "Celsius", "percentage").
+"Celsius" or "percentage".
 .TP
 .B value
-The numeric reading value, or null on error.
-.TP
-.B internal
-Boolean indicating if the sensor is internal.
-.TP
-.B sensor_id
-The sensor identifier.
-.TP
-.B sensor_name
-Custom sensor name from configuration, or default from sc-prototype.
-.TP
-.B timestamp
-Unix timestamp (seconds since epoch) when the sensor was read.
+The reading, to one decimal place, or null if the reading failed.
 .TP
 .B error
-Error message if reading failed, null otherwise.
+The reason the reading failed, or null. A reading never has both a value and
+an error.
+.TP
+.B sensor_id, sensor_name, internal, location
+Taken from the configuration, as described above.
+.TP
+.B timestamp
+The Unix time at which the sensor was read.
+.PP
+The \fBnode_id\fR and \fBdeployment_id\fR fields are left null and are filled
+in by
+.BR sr (1).
 .SH FILES
 .TP
 .I /etc/ws/sensors/dht11.json
-Configuration file specifying sensor pin, internal flag, sensor_id, and sensor_name.
+The configuration file.
 .TP
 .I /dev/gpiochip0
 GPIO chip device used for sensor communication.
@@ -114,13 +133,12 @@ GPIO chip device used for sensor communication.
 Success.
 .TP
 .B 20
-Invalid argument.
+An invalid argument, or the readings could not be produced at all, for example
+because \fBsc-prototype\fR was unavailable. Nothing is printed in that case.
 .TP
 .B 60
-Identify command executed.
+The \fBidentify\fR command.
 .SH NOTES
-This program is designed to be used with the \fBsr\fR program (sensor-read) from WildlifeSystems.
-.PP
 A failed read is retried with increasing delays, within a budget of 8 seconds
 per invocation shared between the configured sensors. The budget keeps the
 program inside the 10-second limit that
@@ -141,6 +159,8 @@ GPIO pins are validated to be in the range 2-27 (valid Raspberry Pi GPIO pins).
 Invalid pins in the configuration file will be replaced with the default pin (4).
 .SH SEE ALSO
 .BR sr (1),
+.BR sc-prototype (1),
+.BR sensor-bme680 (1),
 .BR sensor-w1therm (1)
-.SH AUTHORS
-Wildlife Systems <https://wildlife.systems>
+.SH AUTHOR
+Ed Baker <ed@ebaker.me.uk>

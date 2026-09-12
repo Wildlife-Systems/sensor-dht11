@@ -1,7 +1,9 @@
 Example configurations for reading DHT11
 ========================================
 
-The configuration should be placed in /etc/ws/sensors/dht11.json
+The configuration should be placed in /etc/ws/sensors/dht11.json. It is a
+JSON array with one object per sensor. Without the file, one sensor on GPIO 4
+is read.
 
 Basic reading of sensor
 -----------------------
@@ -25,8 +27,36 @@ Indicating that the sensor is internal (to the enclosure)
 ]
 
 
+Declaring where the sensor is
+-----------------------------
+
+"location" is "{{node}}" for a sensor at the node's own position, "{{none}}"
+for one that deliberately has none, or an object giving latitude and longitude
+in decimal degrees, with altitude and accuracy in metres if surveyed. Omitted,
+the reading's location is null.
+
+[
+  {
+    "pin": 4,
+    "internal": true,
+    "location": "{{node}}"
+  },
+  {
+    "pin": 17,
+    "internal": false,
+    "location": { "latitude": 51.4967, "longitude": -0.1764, "altitude": 12.0, "accuracy": 5.0 }
+  }
+]
+
+
 Setting a custom sensor ID
 --------------------------
+
+If omitted, sensor_id is "<serial>_dht11", where <serial> is the Raspberry Pi
+serial number. Where more than one entry omits it, each is instead
+"<serial>_dht11_pin<N>", so that two sensors do not share an id. Each
+measurement appends its own name, giving for example
+"<serial>_dht11_temperature".
 
 [
   {
@@ -36,19 +66,21 @@ Setting a custom sensor ID
   }
 ]
 
+This produces the readings "My_Custom_ID_temperature" and
+"My_Custom_ID_humidity".
+
 
 Setting a custom sensor name
 ----------------------------
 
-The sensor_name appears in the "sensor" field of the JSON output.
-Default is "dht11" which produces "dht11_temperature" and "dht11_humidity".
+sensor_name is a human-readable label reported in the "sensor_name" field of
+each reading. It does not change "sensor", which is always "dht11_temperature"
+or "dht11_humidity", nor "sensor_id".
 
 [
   {
     "pin": 4,
     "internal": true,
-    "sensor_name": "enclosure_dht11"
+    "sensor_name": "Enclosure DHT11"
   }
 ]
-
-This produces sensor names like "enclosure_dht11_temperature" and "enclosure_dht11_humidity".
