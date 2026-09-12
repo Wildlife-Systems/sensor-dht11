@@ -32,7 +32,7 @@
 
 /* Default configuration */
 #define DEFAULT_PIN       4
-#define CONFIG_PATH       "/etc/ws/sensors/dht11.json"
+#define CONFIG_PATH       WS_CONFIG_PATH("dht11")
 
 /* Sensor configuration structure.
  * The fields every driver shares live in base; pin is ours alone. */
