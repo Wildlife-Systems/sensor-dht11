@@ -11,7 +11,9 @@ CC = gcc
 CFLAGS = $(EXTRA_CFLAGS) -Wall -Wextra -O2 -std=c99 -I/usr/include/ws -DVERSION=\"$(VERSION)\"
 LDFLAGS = $(EXTRA_LDFLAGS) -lgpiod -lwildlifesystems
 
-PREFIX = /usr/local
+# /usr, not /usr/local: sr looks for drivers in /usr/bin only, so a driver
+# installed by hand anywhere else is never found.
+PREFIX ?= /usr
 BINDIR = $(PREFIX)/bin
 MANDIR = $(PREFIX)/share/man/man1
 
