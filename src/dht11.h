@@ -25,13 +25,11 @@
 #define DEFAULT_PIN       4
 #define CONFIG_PATH       "/etc/ws/sensors/dht11.json"
 
-/* Sensor configuration structure */
+/* Sensor configuration structure.
+ * The fields every driver shares live in base; pin is ours alone. */
 typedef struct {
+    ws_sensor_config_base_t base;
     int pin;
-    bool internal;
-    char *sensor_id;    /* Dynamically allocated */
-    char *sensor_name;  /* Dynamically allocated, NULL if not set */
-    ws_location_t location;  /* Where the sensor physically sits */
 } sensor_config_t;
 
 /* Sensor reading structure */

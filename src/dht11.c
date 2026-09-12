@@ -425,64 +425,45 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading) {
  * Parse a simple JSON config file - returns dynamically allocated array
  */
 sensor_config_t *load_config(const char *path, int *count) {
-    char *buffer;
-    const char *ptr;
-    int sensor_idx = 0;
-    sensor_config_t *configs = NULL;
-    int sensor_count;
-    
+    ws_config_iter_t it;
+    sensor_config_t *configs;
+    const char *entry, *entry_end;
+    int n, idx = 0;
+
     *count = 0;
-    
-    buffer = ws_read_file(path, NULL);
-    if (!buffer) {
+
+    n = ws_config_iter_open(&it, path);
+    if (n <= 0) {
+        ws_config_iter_close(&it);
         return NULL;
     }
-    
-    /* Count sensors and allocate */
-    sensor_count = ws_json_count_objects(buffer);
-    if (sensor_count == 0) {
-        free(buffer);
-        return NULL;
-    }
-    
-    configs = malloc(sensor_count * sizeof(sensor_config_t));
+
+    configs = calloc((size_t)n, sizeof(*configs));
     if (!configs) {
-        free(buffer);
+        ws_config_iter_close(&it);
         return NULL;
     }
-    
-    ptr = buffer;
-    while ((ptr = strchr(ptr, '{')) != NULL && sensor_idx < sensor_count) {
-        /* Matching brace, not the first one: a config entry may contain nested
-           objects or braces inside string values. */
-        const char *end = ws_json_object_end(ptr);
-        if (!end) break;
-        
-        int parsed_pin = ws_json_parse_int(ptr, end, "pin", DEFAULT_PIN);
+
+    while (ws_config_iter_next(&it, &configs[idx].base, &entry, &entry_end)) {
+        int parsed_pin = ws_json_parse_int(entry, entry_end, "pin", DEFAULT_PIN);
         if (ws_validate_gpio_pin(parsed_pin)) {
-            configs[sensor_idx].pin = parsed_pin;
+            configs[idx].pin = parsed_pin;
         } else {
             ws_log_error("Invalid GPIO pin %d (must be 2-27), using default %d",
-                      parsed_pin, DEFAULT_PIN);
-            configs[sensor_idx].pin = DEFAULT_PIN;
+                         parsed_pin, DEFAULT_PIN);
+            configs[idx].pin = DEFAULT_PIN;
         }
 
-        configs[sensor_idx].internal = ws_json_parse_bool(ptr, end, "internal", false);
-        configs[sensor_idx].sensor_id = ws_json_parse_string(ptr, end, "sensor_id");
-        configs[sensor_idx].sensor_name = ws_json_parse_string(ptr, end, "sensor_name");
-        ws_parse_sensor_location(ptr, end, &configs[sensor_idx].location);
-
-        /* If no sensor_id in config, use Pi serial with _dht11 suffix */
-        if (configs[sensor_idx].sensor_id == NULL) {
-            configs[sensor_idx].sensor_id = ws_get_serial_with_suffix("dht11");
+        /* No sensor_id in the config: fall back to the Pi serial. */
+        if (configs[idx].base.sensor_id == NULL) {
+            configs[idx].base.sensor_id = ws_get_serial_with_suffix("dht11");
         }
 
-        sensor_idx++;
-        ptr = end + 1;
+        idx++;
     }
-    
-    free(buffer);
-    *count = sensor_idx;
+
+    ws_config_iter_close(&it);
+    *count = idx;
     return configs;
 }
 
@@ -492,8 +473,7 @@ sensor_config_t *load_config(const char *path, int *count) {
 void free_config(sensor_config_t *configs, int count) {
     if (configs) {
         for (int i = 0; i < count; i++) {
-            free(configs[i].sensor_id);
-            free(configs[i].sensor_name);
+            ws_sensor_config_free_fields(&configs[i].base);
         }
         free(configs);
     }
@@ -540,7 +520,7 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
     
     for (i = 0; i < count; i++) {
         sensor_reading_t reading;
-        size_t id_len = configs[i].sensor_id ? strlen(configs[i].sensor_id) : 0;
+        size_t id_len = configs[i].base.sensor_id ? strlen(configs[i].base.sensor_id) : 0;
         char *escaped_id = malloc(id_len * 2 + 1);
         if (!escaped_id) {
             free(output);
@@ -551,16 +531,16 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
         time_t read_timestamp;
         
         /* Skip sensors that don't match the location filter */
-        if (location_filter == WS_LOCATION_INTERNAL && !configs[i].internal) {
+        if (location_filter == WS_LOCATION_INTERNAL && !configs[i].base.internal) {
             free(escaped_id);
             continue;
         }
-        if (location_filter == WS_LOCATION_EXTERNAL && configs[i].internal) {
+        if (location_filter == WS_LOCATION_EXTERNAL && configs[i].base.internal) {
             free(escaped_id);
             continue;
         }
         
-        ws_json_escape_string(configs[i].sensor_id, escaped_id, id_len * 2 + 1);
+        ws_json_escape_string(configs[i].base.sensor_id, escaped_id, id_len * 2 + 1);
         
         /* Capture timestamp when sensor is read */
         read_timestamp = time(NULL);
@@ -577,9 +557,9 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                 
                 build_sensor_json(temp_json, sizeof(temp_json),
                                   "dht11_temperature", "temperature", "Celsius",
-                                  reading.temperature, configs[i].internal, sensor_id_temp,
-                                  configs[i].sensor_name, error_msg, read_timestamp,
-                                  &configs[i].location);
+                                  reading.temperature, configs[i].base.internal, sensor_id_temp,
+                                  configs[i].base.sensor_name, error_msg, read_timestamp,
+                                  &configs[i].base.location);
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(temp_json) + 3;
@@ -604,9 +584,9 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
                 
                 build_sensor_json(humid_json, sizeof(humid_json),
                                   "dht11_humidity", "humidity", "percentage",
-                                  reading.humidity, configs[i].internal, sensor_id_humid,
-                                  configs[i].sensor_name, error_msg, read_timestamp,
-                                  &configs[i].location);
+                                  reading.humidity, configs[i].base.internal, sensor_id_humid,
+                                  configs[i].base.sensor_name, error_msg, read_timestamp,
+                                  &configs[i].base.location);
                 
                 /* Grow output buffer if needed */
                 size_t needed = strlen(output) + strlen(humid_json) + 3;
@@ -713,9 +693,9 @@ int main(int argc, char *argv[]) {
         /* Use default config - allocate dynamically for consistency */
         char *serial = ws_get_serial_with_suffix("dht11");
         default_config.pin = DEFAULT_PIN;
-        default_config.internal = false;
-        default_config.sensor_id = serial;
-        default_config.sensor_name = NULL;  /* NULL = use sc-prototype default */
+        default_config.base.internal = false;
+        default_config.base.sensor_id = serial;
+        default_config.base.sensor_name = NULL;  /* NULL = use sc-prototype default */
         configs = &default_config;
         config_count = 1;
     }
@@ -725,8 +705,8 @@ int main(int argc, char *argv[]) {
     /* Free config */
     if (configs == &default_config) {
         /* Free just the strings from stack-allocated default */
-        free(default_config.sensor_id);
-        free(default_config.sensor_name);
+        free(default_config.base.sensor_id);
+        free(default_config.base.sensor_name);
     } else {
         free_config(configs, config_count);
     }

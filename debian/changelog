@@ -1,5 +1,8 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Config parsing moves to the library's ws_config_iter_* and the common
+    fields to an embedded ws_sensor_config_base_t, so pin is all this driver
+    now declares and parses for itself
   * "mock" no longer prints "(null)_humidity" where the host has no Pi serial;
     it falls back to a fixed id, mock being the command meant to work without
     the hardware
