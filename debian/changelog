@@ -1,5 +1,9 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * Mock readings declare location "{{node}}", as sensor-onboard's mock
+    declares its physical sensors, so every driver's mock has one shape.
+    They used to emit location null, which is what an unconfigured sensor
+    reports, and so disagreed with the shell driver's mock
   * Retries are bounded by a budget of 8 seconds per invocation, shared between
     the sensors being read, so the driver always finishes inside the 10 seconds
     sr allows. The retry schedule alone slept for 9.4 seconds per failing

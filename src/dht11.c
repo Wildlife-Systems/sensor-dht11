@@ -687,8 +687,10 @@ int main(int argc, char *argv[]) {
                hardware. The values are ours; the formatting is the library's,
                so mock cannot drift from what a real read produces. */
             static const ws_mock_reading_t mock[] = {
-                { "dht11_temperature", "temperature", NULL, WS_UNIT_CELSIUS,    22.0, 1 },
-                { "dht11_humidity",    "humidity",    NULL, WS_UNIT_PERCENTAGE, 55.0, 1 },
+                /* Declared at the node, as sensor-onboard's mock declares its
+                   physical sensors, so every driver's mock has one shape. */
+                { "dht11_temperature", "temperature", NULL, WS_UNIT_CELSIUS,    22.0, 1, "{{node}}" },
+                { "dht11_humidity",    "humidity",    NULL, WS_UNIT_PERCENTAGE, 55.0, 1, "{{node}}" },
             };
             return ws_cmd_mock("dht11", "dht11_mock", "Mock DHT11",
                                mock, sizeof(mock) / sizeof(mock[0]));
