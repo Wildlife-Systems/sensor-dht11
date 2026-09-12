@@ -117,8 +117,16 @@ Identify command executed.
 .SH NOTES
 This program is designed to be used with the \fBsr\fR program (sensor-read) from WildlifeSystems.
 .PP
-A watchdog timer (30 seconds) prevents the program from hanging indefinitely if GPIO
-operations become unresponsive.
+A failed read is retried with increasing delays, within a budget of 8 seconds
+per invocation shared between the configured sensors. The budget keeps the
+program inside the 10-second limit that
+.BR sr (1)
+imposes, so a sensor that cannot be read is still reported, with the reason in
+its \fBerror\fR field, rather than the program being killed before it can say
+so.
+.PP
+A watchdog timer (30 seconds) is a last resort for GPIO operations that hang
+outright; the retry budget expires long before it.
 .PP
 The binary uses SCHED_FIFO real-time scheduling during GPIO reads to minimise
 preemption-related timing failures. The
