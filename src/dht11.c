@@ -650,32 +650,15 @@ int main(int argc, char *argv[]) {
             printf("DHT11 sensor requires no additional setup.\n");
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "mock") == 0) {
-            /* Output mock data for testing without hardware */
-            char *serial = ws_get_serial_with_suffix("dht11_mock");
-            /* No Pi serial (an unreadable /proc/cpuinfo) must not reach "%s"
-               as NULL. Mock exists to work without the hardware, so fall back
-               to a fixed id rather than failing. */
-            const char *base = serial ? serial : "dht11_mock";
-            time_t now = time(NULL);
-            char json[2048];
-            printf("[");
-            /* Temperature */
-            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "dht11", "temperature", WS_UNIT_CELSIUS,
-                                          base, "Mock DHT11", false, NULL, now) == 0) {
-                ws_sensor_json_set_value(json, 22.0, 1);
-                printf("%s", json);
-            }
-            /* Humidity */
-            char humid_id[128];
-            snprintf(humid_id, sizeof(humid_id), "%s_humidity", base);
-            if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "dht11", "humidity", WS_UNIT_PERCENTAGE,
-                                          humid_id, "Mock DHT11", false, NULL, now) == 0) {
-                ws_sensor_json_set_value(json, 55.0, 1);
-                printf(",%s", json);
-            }
-            printf("]\n");
-            free(serial);
-            return WS_EXIT_SUCCESS;
+            /* Fixed readings in the real output format, for testing without
+               hardware. The values are ours; the formatting is the library's,
+               so mock cannot drift from what a real read produces. */
+            static const ws_mock_reading_t mock[] = {
+                { "dht11_temperature", "temperature", NULL, WS_UNIT_CELSIUS,    22.0, 1 },
+                { "dht11_humidity",    "humidity",    NULL, WS_UNIT_PERCENTAGE, 55.0, 1 },
+            };
+            return ws_cmd_mock("dht11", "dht11_mock", "Mock DHT11",
+                               mock, sizeof(mock) / sizeof(mock[0]));
         } else if (strcmp(argv[1], "temperature") == 0 || 
                    strcmp(argv[1], "humidity") == 0) {
             filter = argv[1];
