@@ -637,7 +637,11 @@ void output_json(sensor_config_t *configs, int count, const char *filter, ws_loc
 
 int main(int argc, char *argv[]) {
     sensor_config_t *configs = NULL;
-    sensor_config_t default_config;
+    /* Zero-initialised: the default path sets each field explicitly except
+       location, which must read as WS_LOC_UNDECLARED rather than whatever
+       was on the stack. A garbage source of WS_LOC_EXPLICIT would emit a
+       GeoJSON Point built from uninitialised coordinates. */
+    sensor_config_t default_config = {0};
     int config_count = 0;
     const char *filter = NULL;
     ws_location_filter_t location_filter = WS_LOCATION_ALL;

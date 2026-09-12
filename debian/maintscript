@@ -1,0 +1,9 @@
+# The config moved from /etc/ws/dht11.json to /etc/ws/sensors/dht11.json in
+# 2.0.0 (the C rewrite), but nothing migrated it. Nodes upgraded from 1.x kept
+# their edited config at the old path where nothing reads it, and silently fell
+# back to the defaults shipped at the new path.
+#
+# The prior-version is 2.3.0~ rather than 2.0.0~ deliberately: nodes that have
+# already upgraded past 2.0.0 are exactly the ones carrying an orphaned config,
+# so the migration has to trigger for them too.
+mv_conffile /etc/ws/dht11.json /etc/ws/sensors/dht11.json 2.3.0~

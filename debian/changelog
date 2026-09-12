@@ -1,3 +1,18 @@
+sensor-dht11 (2.3.0) stable; urgency=medium
+
+  * Migrate the config from /etc/ws/dht11.json to /etc/ws/sensors/dht11.json.
+    The path changed in 2.0.0 with the C rewrite, but nothing moved existing
+    files, so any node upgraded from 1.x has been running on the shipped
+    defaults since while its real configuration sat unread at the old path.
+    A custom pin, sensor_id or internal flag would have stopped taking effect
+    silently at that upgrade
+  * Zero-initialise default_config. It sets every field explicitly except
+    location, which was left reading uninitialised stack memory on nodes with
+    no config file; a garbage source of WS_LOC_EXPLICIT would have emitted a
+    GeoJSON Point built from uninitialised coordinates
+
+ -- Ed Baker <ed@ebaker.me.uk>  Sat, 12 Sep 2026 10:00:00 +0100
+
 sensor-dht11 (2.2.0) stable; urgency=medium
 
   * Report device "dht11" and the sensor's configured location
