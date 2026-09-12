@@ -1,5 +1,10 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * The default configuration, used when there is no config file, is built
+    by load_config on the heap like a parsed one, so there is one free path
+    rather than a stack special case; the measurement id and the location
+    filter test come from the library, which sensor-bme680 shared copies of;
+    and the config path is spelt with WS_CONFIG_PATH
   * Two config entries without a sensor_id no longer get the same one. Both
     used to be "<serial>_dht11", so two DHT11s on different pins were merged
     downstream into one series without a word. A lone entry keeps that id, so

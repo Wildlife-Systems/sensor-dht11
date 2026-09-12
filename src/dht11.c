@@ -445,7 +445,27 @@ static void pin_designation(const void *entry, char *buf, size_t cap) {
 }
 
 /*
- * Parse a simple JSON config file - returns dynamically allocated array
+ * The config to use when there is no file: one sensor on the default pin,
+ * identified by the node serial. Heap-allocated like a parsed config, so the
+ * caller frees it the same way and needs no special case.
+ */
+static sensor_config_t *default_config(int *count) {
+    sensor_config_t *configs = calloc(1, sizeof(*configs));
+    if (!configs) return NULL;
+
+    configs[0].pin = DEFAULT_PIN;
+    if (ws_config_assign_fallback_ids(configs, sizeof(*configs), 1, "dht11",
+                                      pin_designation) < 0) {
+        free(configs);
+        return NULL;
+    }
+    *count = 1;
+    return configs;
+}
+
+/*
+ * Parse the config file, or fall back to the default when there is none.
+ * Returns NULL only when out of memory.
  */
 sensor_config_t *load_config(const char *path, int *count) {
     ws_config_iter_t it;
@@ -458,7 +478,7 @@ sensor_config_t *load_config(const char *path, int *count) {
     n = ws_config_iter_open(&it, path);
     if (n <= 0) {
         ws_config_iter_close(&it);
-        return NULL;
+        return default_config(count);
     }
 
     configs = calloc((size_t)n, sizeof(*configs));
@@ -480,6 +500,11 @@ sensor_config_t *load_config(const char *path, int *count) {
     }
 
     ws_config_iter_close(&it);
+
+    if (idx == 0) {
+        free(configs);
+        return default_config(count);
+    }
 
     /* Entries without a sensor_id get one from the node serial. The library
        keeps a lone entry at "<serial>_dht11", as the default config has
@@ -535,24 +560,6 @@ static int build_sensor_json(char *output, size_t output_len,
 }
 
 /*
- * Build "<sensor_id>_<measurement>". Returns NULL if the id is unknown or the
- * allocation fails; the caller then emits the reading with a null sensor_id.
- */
-static char *measurement_id(const char *sensor_id, const char *measurement) {
-    size_t len;
-    char *out;
-
-    if (!sensor_id) return NULL;
-
-    len = strlen(sensor_id) + strlen(measurement) + 2;  /* '_' and terminator */
-    out = malloc(len);
-    if (!out) return NULL;
-
-    snprintf(out, len, "%s_%s", sensor_id, measurement);
-    return out;
-}
-
-/*
  * Append one measurement of one sensor to the output array.
  * The sensor_id suffix is the measurement name, so temperature and humidity
  * differ only in the arguments.
@@ -564,7 +571,7 @@ static void append_reading(ws_json_array_builder_t *out, const sensor_config_t *
     /* An unknown id leaves "sensor_id":null, which records that it is
        unknown. Dropping the reading instead would report the node as
        having no sensors, which is worse and silent. */
-    char *sensor_id = measurement_id(config->base.sensor_id, measures);
+    char *sensor_id = ws_measurement_id(config->base.sensor_id, measures);
 
     /* A reading that could not be built is not added: the array would
        refuse the empty item anyway, and fail as a whole. */
@@ -586,9 +593,7 @@ static void append_reading(ws_json_array_builder_t *out, const sensor_config_t *
  * Does this sensor pass the location filter?
  */
 static bool selected(const sensor_config_t *config, ws_location_filter_t location_filter) {
-    if (location_filter == WS_LOCATION_INTERNAL && !config->base.internal) return false;
-    if (location_filter == WS_LOCATION_EXTERNAL && config->base.internal) return false;
-    return true;
+    return ws_location_filter_matches(location_filter, config->base.internal);
 }
 
 int output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter) {
@@ -659,11 +664,6 @@ int main(int argc, char *argv[]) {
        the measurement filters it accepts, and its usage line. */
     static const char *measurements[] = {"temperature", "humidity", NULL};
     sensor_config_t *configs = NULL;
-    /* Zero-initialised: the default path sets each field explicitly except
-       location, which must read as WS_LOC_UNDECLARED rather than whatever
-       was on the stack. A garbage source of WS_LOC_EXPLICIT would emit a
-       GeoJSON Point built from uninitialised coordinates. */
-    sensor_config_t default_config = {0};
     int config_count = 0;
     const char *filter = NULL;
     ws_location_filter_t location_filter = WS_LOCATION_ALL;
@@ -728,27 +728,16 @@ int main(int argc, char *argv[]) {
     }
 
     configs = load_config(CONFIG_PATH, &config_count);
-    if (configs == NULL || config_count == 0) {
-        /* Use default config - allocate dynamically for consistency */
-        char *serial = ws_get_serial_with_suffix("dht11");
-        default_config.pin = DEFAULT_PIN;
-        default_config.base.internal = false;
-        default_config.base.sensor_id = serial;
-        default_config.base.sensor_name = NULL;  /* NULL = use sc-prototype default */
-        configs = &default_config;
-        config_count = 1;
+    if (!configs) {
+        ws_log_error("Out of memory loading configuration");
+        cancel_watchdog();
+        closelog();
+        return WS_EXIT_INVALID_ARG;
     }
-    
+
     status = output_json(configs, config_count, filter, location_filter);
 
-    /* Free config */
-    if (configs == &default_config) {
-        /* Free just the strings from stack-allocated default */
-        free(default_config.base.sensor_id);
-        free(default_config.base.sensor_name);
-    } else {
-        free_config(configs, config_count);
-    }
+    free_config(configs, config_count);
 
     /* Cancel watchdog before normal exit */
     cancel_watchdog();
