@@ -18,8 +18,8 @@ sensor-dht11 (2.4.0) stable; urgency=medium
   * "mock" is a table of values passed to the library rather than hand-built
     JSON, so it cannot drift from the real output format. This fixes the mock
     temperature sensor_id, which was "<serial>_dht11_mock" where a real read
-    emits "<serial>_dht11_mock_temperature"; anything calibrated against mock was
-    matching an id shape the driver never actually produces
+    emits "<serial>_dht11_mock_temperature"; anything calibrated against mock
+    was matching an id shape the driver never actually produces
   * Correct a stale comment claiming a device-tree overlay is needed. The
     readings are bit-banged over libgpiod, so there is nothing to enable and
     "enable" doing nothing is correct, which the comment implied was an omission
