@@ -520,12 +520,8 @@ static void build_sensor_json(char *output, size_t output_len,
         return;
     }
     
-    if (error_msg) {
-        /* value stays null; the library escapes the message */
-        ws_sensor_json_set_error(output, error_msg);
-    } else {
-        ws_sensor_json_set_value(output, (double)value, 1);
-    }
+    /* Exactly one of value or error; the library escapes the message. */
+    ws_sensor_json_set_result(output, output_len, (double)value, 1, error_msg);
 }
 
 /*
@@ -674,18 +670,22 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "mock") == 0) {
             /* Output mock data for testing without hardware */
             char *serial = ws_get_serial_with_suffix("dht11_mock");
+            /* No Pi serial (an unreadable /proc/cpuinfo) must not reach "%s"
+               as NULL. Mock exists to work without the hardware, so fall back
+               to a fixed id rather than failing. */
+            const char *base = serial ? serial : "dht11_mock";
             time_t now = time(NULL);
             char json[2048];
             printf("[");
             /* Temperature */
             if (ws_build_sensor_json_base(json, sizeof(json), "dht11_temperature", "dht11", "temperature", "Celsius",
-                                          serial, "Mock DHT11", false, NULL, now) == 0) {
+                                          base, "Mock DHT11", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 22.0, 1);
                 printf("%s", json);
             }
             /* Humidity */
             char humid_id[128];
-            snprintf(humid_id, sizeof(humid_id), "%s_humidity", serial);
+            snprintf(humid_id, sizeof(humid_id), "%s_humidity", base);
             if (ws_build_sensor_json_base(json, sizeof(json), "dht11_humidity", "dht11", "humidity", "percentage",
                                           humid_id, "Mock DHT11", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 55.0, 1);
