@@ -1,5 +1,10 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * A reading whose sensor_id cannot be determined is emitted with
+    "sensor_id":null rather than with a fabricated "_temperature", which looked
+    like a real identifier and would have collided between nodes
+  * The measurement filters and the usage line are both taken from the list of
+    measurements, so the three cannot drift apart
   * "mock" is a table of values passed to the library rather than hand-built
     JSON, so it cannot drift from the real output format. This fixes the mock
     temperature sensor_id, which was "<serial>_dht11_mock" where a real read
