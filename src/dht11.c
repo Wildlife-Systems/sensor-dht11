@@ -626,12 +626,15 @@ int output_json(sensor_config_t *configs, int count, const char *filter, ws_loca
 
         if (!selected(&configs[i], location_filter)) continue;
 
-        /* Timestamp when the sensor was read */
-        read_timestamp = time(NULL);
-
         if (read_dht11(configs[i].pin, &reading, budget_us) != 0 || !reading.valid) {
             error_msg = reading.error_msg;
         }
+
+        /* Stamped when the value was obtained, not when the attempt began.
+           A read that retried for several seconds is reported at the time
+           it succeeded. Every driver stamps after its read, so the field
+           means one thing whichever driver wrote it. */
+        read_timestamp = time(NULL);
 
         if (!filter || strcmp(filter, "temperature") == 0 || strcmp(filter, "all") == 0) {
             append_reading(&out, &configs[i], "dht11_temperature",
