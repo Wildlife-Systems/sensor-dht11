@@ -1,4 +1,4 @@
-sensor-dht11 (2.4.0) stable; urgency=medium
+sensor-dht11 (2.4.1) stable; urgency=medium
 
   * The driver reaches the GPIO pin through the Linux GPIO character device,
     not libgpiod. libgpiod 2 removed every call the driver made, and
@@ -25,6 +25,11 @@ sensor-dht11 (2.4.0) stable; urgency=medium
   * The source package no longer contains the git repository.
     debian/source/options replaced dpkg-source's default exclusions instead of
     adding to them, so .git was packed into the tarball
+
+ -- Ed Baker <ed@ebaker.me.uk>  Mon, 14 Sep 2026 14:03:59 +0100
+
+sensor-dht11 (2.4.0) stable; urgency=medium
+
   * The example configuration is a plain JSON file, examples/dht11.json,
     installed under /usr/share/doc/sensor-dht11/examples/ as the other drivers'
     are, and usable as it stands. It replaces a prose document with snippets
