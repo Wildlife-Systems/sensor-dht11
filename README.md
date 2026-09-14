@@ -71,14 +71,15 @@ same commands.
 
 ## Configuration
 
-Configuration is read from `/etc/ws/sensors/dht11.json`. Without the file, a
-single sensor on GPIO 4 is read.
+Configuration is read from `/etc/ws/sensors/dht11.json`. The package installs
+it with one sensor on GPIO 4, inside the enclosure. Without the file, a single
+sensor on GPIO 4 is read, and is treated as outside the enclosure.
 
 ```json
 [
   {
     "pin": 4,
-    "internal": false,
+    "internal": true,
     "location": "{{node}}"
   }
 ]

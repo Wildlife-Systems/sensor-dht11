@@ -1,3 +1,17 @@
+sensor-dht11 (2.4.2) stable; urgency=medium
+
+  * The shipped /etc/ws/sensors/dht11.json says "internal": true again. An
+    entry that leaves out internal still defaults to false, and so does the
+    sensor read when there is no configuration file. 2.4.0 had changed the
+    shipped file to match that default, and dpkg replaces an unedited
+    configuration file on upgrade, so every node that had not edited it began
+    reporting its DHT11 as external. Upgrading restores internal on those
+    nodes
+  * The README and man page say that the shipped file marks its sensor as
+    inside the enclosure, while the default is outside
+
+ -- Ed Baker <ed@ebaker.me.uk>  Mon, 14 Sep 2026 15:45:17 +0100
+
 sensor-dht11 (2.4.1) stable; urgency=medium
 
   * The driver reaches the GPIO pin through the Linux GPIO character device,

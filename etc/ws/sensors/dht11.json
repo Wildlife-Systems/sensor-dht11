@@ -1,6 +1,6 @@
 [
   {
     "pin": 4,
-    "internal": false
+    "internal": true
   }
 ]
