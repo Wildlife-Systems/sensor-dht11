@@ -1,4 +1,4 @@
-.TH SENSOR-DHT11 1 "September 2026" "sensor-dht11 2.4.1" "WildlifeSystems"
+.TH SENSOR-DHT11 1 "September 2026" "sensor-dht11 2.4.2" "WildlifeSystems"
 .SH NAME
 sensor-dht11 \- read DHT11 temperature and humidity sensors
 .SH SYNOPSIS
@@ -47,8 +47,10 @@ Output every measurement from every sensor.
 .SH CONFIGURATION
 The configuration file
 .I /etc/ws/sensors/dht11.json
-is a JSON array with one object per sensor. Without the file, a single sensor
-on GPIO 4 is read. Each object may contain the following fields.
+is a JSON array with one object per sensor. The package installs it with one
+sensor on GPIO 4, inside the enclosure. Without the file, a single sensor on
+GPIO 4 is read, and is treated as outside the enclosure. Each object may
+contain the following fields.
 .TP
 .B pin
 The GPIO pin number, 2 to 27. The default is 4. An invalid pin number is
