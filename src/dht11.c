@@ -2,7 +2,8 @@
  * sensor-dht11 - Read DHT11 sensors on Raspberry Pi
  * Copyright (C) 2024 Wildlife Systems
  *
- * C implementation using libgpiod for GPIO bit-banging.
+ * C implementation that bit-bangs the GPIO line through the Linux GPIO
+ * character device; see gpio.h.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -18,23 +19,18 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <syslog.h>
-#include <gpiod.h>
 
 #include "dht11.h"
+#include "gpio.h"
 #include <ws_utils.h>
 
 /* Global state for signal handler cleanup */
 static volatile sig_atomic_t g_running = 1;
-static struct gpiod_chip *g_chip = NULL;
-static struct gpiod_line *g_line = NULL;
+static volatile sig_atomic_t g_line_fd = -1;  /* line held by a read, or -1 */
 
 /* DHT11 timing constants (microseconds) */
 #define DHT11_START_LOW_US      20000   /* Start signal: pull low for 20ms */
-#define DHT11_START_HIGH_US     20      /* Then release for 20-40us */
 #define DHT11_TIMEOUT_US        1000    /* Timeout waiting for edges */
-
-/* GPIO chip for Raspberry Pi */
-#define GPIO_CHIP_PATH  "/dev/gpiochip0"
 
 /*
  * Get current time in microseconds
@@ -49,21 +45,18 @@ static uint64_t micros(void) {
  * Signal handler for graceful cleanup
  */
 static void signal_handler(int sig) {
+    static const char msg[] = "sensor-dht11: caught signal, exiting\n";
+
     (void)sig;
     g_running = 0;
-    
-    /* Release GPIO resources if held */
-    if (g_line) {
-        gpiod_line_release(g_line);
-        g_line = NULL;
+
+    /* Release the GPIO line if a read holds it. Only calls that are safe in
+       a signal handler are made here, so the message goes to stderr through
+       write() rather than to syslog. */
+    dht_gpio_close(g_line_fd);
+    if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {
+        /* Nothing further can be done while exiting */
     }
-    if (g_chip) {
-        gpiod_chip_close(g_chip);
-        g_chip = NULL;
-    }
-    
-    syslog(LOG_INFO, "Caught signal, exiting");
-    closelog();
     _exit(1);
 }
 
@@ -84,20 +77,16 @@ static void setup_signal_handlers(void) {
  * Watchdog alarm handler - triggers if GPIO operations hang
  */
 static void watchdog_handler(int sig) {
+    static const char msg[] = "sensor-dht11: watchdog timeout - GPIO operations hung\n";
+
     (void)sig;
-    ws_log_error("Watchdog timeout - GPIO operations hung");
-    
-    /* Release GPIO resources if held */
-    if (g_line) {
-        gpiod_line_release(g_line);
-        g_line = NULL;
+
+    /* Release the GPIO line, making only calls that are safe in a signal
+       handler */
+    dht_gpio_close(g_line_fd);
+    if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {
+        /* Nothing further can be done while exiting */
     }
-    if (g_chip) {
-        gpiod_chip_close(g_chip);
-        g_chip = NULL;
-    }
-    
-    closelog();
     _exit(1);
 }
 
@@ -125,12 +114,12 @@ static void cancel_watchdog(void) {
  * Wait for a specific GPIO level with timeout
  * Returns the duration in microseconds, or -1 on timeout
  */
-static int wait_for_level(struct gpiod_line *line, int level, int timeout_us) {
+static int wait_for_level(int fd, int level, int timeout_us) {
     uint64_t start = micros();
     uint64_t deadline = start + timeout_us;
     int current;
-    
-    while ((current = gpiod_line_get_value(line)) != level) {
+
+    while ((current = dht_gpio_get(fd)) != level) {
         if (current < 0) {
             return -2;  /* Error reading GPIO */
         }
@@ -142,107 +131,46 @@ static int wait_for_level(struct gpiod_line *line, int level, int timeout_us) {
 }
 
 /*
- * Read DHT11 sensor using bit-banging
- * Returns 0 on success, -1 on error
- * If error_msg is provided, sets descriptive error message
+ * Send the start signal on a held line and receive the DHT11's 40 bits.
+ * Returns 0 with data filled and its checksum verified, or -1. The caller
+ * holds the line and releases it whatever this returns.
  */
-static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t error_len) {
-    struct gpiod_chip *chip;
-    struct gpiod_line *line;
+static int dht11_exchange(int fd, uint8_t data[5]) {
     int i, j;
-    
-    /* Check if we should stop */
-    if (!g_running) {
-        return -1;
-    }
-    
-    /* Open GPIO chip */
-    chip = gpiod_chip_open(GPIO_CHIP_PATH);
-    if (!chip) {
-        ws_log_error("Failed to open GPIO chip %s", GPIO_CHIP_PATH);
-        fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
-        if (error_msg) {
-            snprintf(error_msg, error_len, "GPIO access denied - try running with sudo");
-        }
-        return -1;
-    }
-    g_chip = chip;  /* Store for signal handler cleanup */
-    
-    /* Get the GPIO line */
-    line = gpiod_chip_get_line(chip, gpio_pin);
-    if (!line) {
-        ws_log_error("Failed to get GPIO line %d", gpio_pin);
-        if (error_msg) {
-            snprintf(error_msg, error_len, "Failed to get GPIO line %d", gpio_pin);
-        }
-        gpiod_chip_close(chip);
-        g_chip = NULL;
-        return -1;
-    }
-    g_line = line;  /* Store for signal handler cleanup */
-    
+
     /* === SEND START SIGNAL === */
-    
-    /* Request line as output, initially high */
-    if (gpiod_line_request_output(line, "dht11", 1) < 0) {
-        ws_log_error("Cannot request GPIO %d as output: %s", gpio_pin, strerror(errno));
-        fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
-        if (error_msg) {
-            snprintf(error_msg, error_len, "GPIO access denied - try running with sudo");
-        }
-        gpiod_chip_close(chip);
-        return -1;
-    }
-    
+
     /* Pull low for at least 18ms to signal start */
-    gpiod_line_set_value(line, 0);
-    usleep(DHT11_START_LOW_US);
-    
-    /* Pull high and wait for DHT11 response */
-    gpiod_line_set_value(line, 1);
-    usleep(DHT11_START_HIGH_US);
-    
-    /* Release line and switch to input */
-    gpiod_line_release(line);
-    if (gpiod_line_request_input(line, "dht11") < 0) {
-        ws_log_error("Cannot request GPIO %d as input: %s", gpio_pin, strerror(errno));
-        fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
-        if (error_msg) {
-            snprintf(error_msg, error_len, "GPIO access denied - try running with sudo");
-        }
-        gpiod_chip_close(chip);
-        g_line = NULL;
-        g_chip = NULL;
+    if (dht_gpio_set(fd, 0) < 0) {
+        ws_log_error("Cannot drive the GPIO line low: %s", strerror(errno));
         return -1;
     }
-    
+    usleep(DHT11_START_LOW_US);
+
+    /* Release the line to its pull-up by switching it to input; the DHT11
+       answers 20-40us later. Switching in place is a single call, where
+       releasing the line and requesting it again took two and could miss
+       the start of the answer. */
+    if (dht_gpio_input(fd) < 0) {
+        ws_log_error("Cannot switch the GPIO line to input: %s", strerror(errno));
+        return -1;
+    }
+
     /* === WAIT FOR DHT11 RESPONSE === */
     
     /* DHT11 response: LOW for ~80us, then HIGH for ~80us, then LOW for first bit */
     /* Wait for response LOW */
-    if (wait_for_level(line, 0, DHT11_TIMEOUT_US) < 0) {
-        gpiod_line_release(line);
-        gpiod_chip_close(chip);
-        g_line = NULL;
-        g_chip = NULL;
+    if (wait_for_level(fd, 0, DHT11_TIMEOUT_US) < 0) {
         return -1;
     }
     
     /* Wait for response HIGH */
-    if (wait_for_level(line, 1, DHT11_TIMEOUT_US) < 0) {
-        gpiod_line_release(line);
-        gpiod_chip_close(chip);
-        g_line = NULL;
-        g_chip = NULL;
+    if (wait_for_level(fd, 1, DHT11_TIMEOUT_US) < 0) {
         return -1;
     }
     
     /* Wait for first data bit LOW (start of bit) */
-    if (wait_for_level(line, 0, DHT11_TIMEOUT_US) < 0) {
-        gpiod_line_release(line);
-        gpiod_chip_close(chip);
-        g_line = NULL;
-        g_chip = NULL;
+    if (wait_for_level(fd, 0, DHT11_TIMEOUT_US) < 0) {
         return -1;
     }
     
@@ -257,14 +185,14 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     /* Read all available pulses */
     for (i = 0; i < 50; i++) {
         /* Wait for HIGH with timeout */
-        int high_result = wait_for_level(line, 1, DHT11_TIMEOUT_US);
+        int high_result = wait_for_level(fd, 1, DHT11_TIMEOUT_US);
         if (high_result < 0) {
             break;  /* No more bits */
         }
         
         /* Measure how long the HIGH lasts */
         uint64_t start = micros();
-        wait_for_level(line, 0, DHT11_TIMEOUT_US);
+        wait_for_level(fd, 0, DHT11_TIMEOUT_US);
         int duration = (int)(micros() - start);
         
         pulse_times[num_pulses++] = duration;
@@ -283,10 +211,6 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     
     /* We need at least 38 valid pulses - may be missing 1-2 due to timing */
     if (valid_pulses < 38) {
-        gpiod_line_release(line);
-        gpiod_chip_close(chip);
-        g_line = NULL;
-        g_chip = NULL;
         return -1;
     }
     
@@ -330,12 +254,7 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
         }
         bit_idx++;
     }
-    
-    gpiod_line_release(line);
-    gpiod_chip_close(chip);
-    g_line = NULL;
-    g_chip = NULL;
-    
+
     /* Verify checksum */
     uint8_t checksum = data[0] + data[1] + data[2] + data[3];
     if (checksum != data[4]) {
@@ -343,6 +262,47 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     }
     
     return 0;
+}
+
+/*
+ * Read DHT11 sensor using bit-banging
+ * Returns 0 on success, -1 on error
+ * If error_msg is provided, sets descriptive error message
+ */
+static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t error_len) {
+    char why[128];
+    int fd;
+    int ret;
+
+    /* Check if we should stop */
+    if (!g_running) {
+        return -1;
+    }
+
+    /* Request the line as an output, initially high. Failing to get the line
+       is not a timing fault, so the message it leaves tells read_dht11 not
+       to retry. */
+    fd = dht_gpio_open(gpio_pin, why, sizeof(why));
+    if (fd < 0) {
+        int err = errno;
+
+        ws_log_error("%s", why);
+        if (err == EACCES || err == EPERM) {
+            fprintf(stderr, "Hint: Try running with sudo for GPIO access\n");
+        }
+        if (error_msg) {
+            snprintf(error_msg, error_len, "%s", why);
+        }
+        return -1;
+    }
+    g_line_fd = fd;  /* Store for signal handler cleanup */
+
+    ret = dht11_exchange(fd, data);
+
+    /* Every read releases the line here, whatever the exchange returned */
+    g_line_fd = -1;
+    dht_gpio_close(fd);
+    return ret;
 }
 
 /* Retry delays in microseconds: 0.05s x2, 0.1s x3, then 0.2, 0.4, 0.8, 1.6, 2s x3.
@@ -693,8 +653,8 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "enable") == 0) {
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "setup") == 0) {
-            /* Bit-banged over libgpiod, so no device-tree overlay and
-               nothing to set up. */
+            /* Bit-banged through the GPIO character device, so no
+               device-tree overlay and nothing to set up. */
             printf("DHT11 sensor requires no additional setup.\n");
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "mock") == 0) {

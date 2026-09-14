@@ -2,7 +2,8 @@
  * sensor-dht11 - Read DHT11 sensors on Raspberry Pi
  * Copyright (C) 2024 Wildlife Systems
  *
- * Header file for DHT11 sensor reading functionality using libgpiod
+ * Header file for DHT11 sensor reading functionality, through the Linux GPIO
+ * character device
  */
 
 #ifndef DHT11_H

@@ -1,5 +1,30 @@
 sensor-dht11 (2.4.0) stable; urgency=medium
 
+  * The driver reaches the GPIO pin through the Linux GPIO character device,
+    not libgpiod. libgpiod 2 removed every call the driver made, and
+    Raspberry Pi OS trixie ships only libgpiod 2, so the package could not be
+    built there. The published package also required libgpiod2t64, the name
+    that only Ubuntu 24.04 uses, so it could not be installed on Raspberry Pi
+    OS bookworm. With no GPIO library, one build installs on Ubuntu 24.04,
+    bookworm and trixie. Version 2 of the interface requires Linux 5.10 or
+    later
+  * The start signal releases the line by switching it to input in a single
+    call. The line was driven high, released and requested again, which
+    could take longer than the 20 to 40 microseconds before the sensor starts
+    to answer
+  * A pin that cannot be used gives the reason: in use by another driver,
+    access denied, or no such pin on the chip. Every such failure said "GPIO
+    access denied - try running with sudo", including a pin held by w1-gpio
+  * A read releases the pin in one place, whatever its outcome. When the pin
+    could not be requested as an output, the chip was freed while the signal
+    handlers still pointed at it, so a signal at that moment could crash the
+    driver
+  * The signal and watchdog handlers make only calls that are safe in a signal
+    handler. They called libgpiod and syslog; their messages now go to
+    standard error
+  * The source package no longer contains the git repository.
+    debian/source/options replaced dpkg-source's default exclusions instead of
+    adding to them, so .git was packed into the tarball
   * The example configuration is a plain JSON file, examples/dht11.json,
     installed under /usr/share/doc/sensor-dht11/examples/ as the other drivers'
     are, and usable as it stands. It replaces a prose document with snippets

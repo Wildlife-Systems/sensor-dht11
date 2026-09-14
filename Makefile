@@ -1,5 +1,6 @@
 # Makefile for sensor-dht11 (C version)
-# Build DHT11 sensor reader for Raspberry Pi using libgpiod
+# Build the DHT11 sensor reader for Raspberry Pi. It reaches the GPIO pin
+# through the Linux GPIO character device, so no GPIO library is linked.
 
 # Extract version from debian/changelog
 VERSION := $(shell head -n1 debian/changelog | sed 's/.*(//' | sed 's/).*//')
@@ -9,7 +10,7 @@ CC = gcc
 # installed library: the root Makefile uses them to build against the
 # libwildlifesystems it has just built rather than whatever is in /usr.
 CFLAGS = $(EXTRA_CFLAGS) -Wall -Wextra -O2 -std=c99 -I/usr/include/ws -DVERSION=\"$(VERSION)\"
-LDFLAGS = $(EXTRA_LDFLAGS) -lgpiod -lwildlifesystems
+LDFLAGS = $(EXTRA_LDFLAGS) -lwildlifesystems
 
 # /usr, not /usr/local: sr looks for drivers in /usr/bin only, so a driver
 # installed by hand anywhere else is never found.
@@ -19,8 +20,8 @@ MANDIR = $(PREFIX)/share/man/man1
 
 SRCDIR = src
 TARGET = sensor-dht11
-SOURCES = $(SRCDIR)/dht11.c
-HEADERS = $(SRCDIR)/dht11.h
+SOURCES = $(SRCDIR)/dht11.c $(SRCDIR)/gpio.c
+HEADERS = $(SRCDIR)/dht11.h $(SRCDIR)/gpio.h
 
 .PHONY: all clean install uninstall debug deb
 

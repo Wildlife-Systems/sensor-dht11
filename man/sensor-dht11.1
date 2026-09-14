@@ -7,8 +7,9 @@ sensor-dht11 \- read DHT11 temperature and humidity sensors
 .SH DESCRIPTION
 .B sensor-dht11
 reads DHT11 temperature and humidity sensors connected to the GPIO pins of a
-Raspberry Pi, using libgpiod, and outputs the readings as a JSON array in the
-WildlifeSystems format, one reading per measurement. It is normally run by
+Raspberry Pi, through the Linux GPIO character device, and outputs the readings
+as a JSON array in the WildlifeSystems format, one reading per measurement. It
+is normally run by
 .BR sr (1).
 .SH COMMANDS
 Not specifying a command is equivalent to \fBall\fR.
@@ -28,7 +29,7 @@ Output only that measurement from every sensor.
 .TP
 .B setup, enable
 Report that nothing is required. The sensor is read by bit-banging a GPIO pin,
-so no kernel interface has to be enabled. The commands are provided so that
+so no device-tree overlay has to be enabled. The commands are provided so that
 every driver answers the same commands.
 .TP
 .B mock
@@ -126,7 +127,8 @@ in by
 The configuration file.
 .TP
 .I /dev/gpiochip0
-GPIO chip device used for sensor communication.
+The GPIO character device through which the sensor is read. Version 2 of its
+interface is used, which requires Linux 5.10 or later.
 .SH EXIT STATUS
 .TP
 .B 0

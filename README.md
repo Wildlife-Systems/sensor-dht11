@@ -2,7 +2,8 @@
 
 sensor-dht11 reads DHT11 temperature and humidity sensors connected to the GPIO
 pins of a Raspberry Pi and outputs their readings in the WildlifeSystems
-format. It is written in C, using libgpiod.
+format. It is written in C and reads the pins through the Linux GPIO character
+device.
 
 ## Building from source
 
@@ -64,7 +65,7 @@ sensor-dht11 mock
 ```
 
 The `setup` and `enable` commands report that nothing is required, since the
-sensor is read by bit-banging a GPIO pin and no kernel interface has to be
+sensor is read by bit-banging a GPIO pin and no device-tree overlay has to be
 enabled. They are provided so that every WildlifeSystems driver answers the
 same commands.
 
@@ -122,11 +123,13 @@ A reading that could not be taken has a null `value` and the reason in
 
 ## How it works
 
-The DHT11 is read by bit-banging a GPIO pin from user space with libgpiod. The
-pulses that carry the data are between 26 and 70 microseconds long, so the read
-is performed under SCHED_FIFO real-time scheduling to reduce the timing failures
-caused by pre-emption. The `cap_sys_nice` capability, which allows this without
-root, is set on the binary when the package is installed.
+The DHT11 is read by bit-banging a GPIO pin from user space, through the Linux
+GPIO character device `/dev/gpiochip0`. Version 2 of that interface is used, so
+Linux 5.10 or later is required, and no GPIO library is needed. The pulses that
+carry the data are between 26 and 70 microseconds long, so the read is performed
+under SCHED_FIFO real-time scheduling to reduce the timing failures caused by
+pre-emption. The `cap_sys_nice` capability, which allows this without root, is
+set on the binary when the package is installed.
 
 A failed read is retried with increasing delays, within a budget of 8 seconds
 per invocation shared between the configured sensors. The budget keeps the
