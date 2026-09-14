@@ -52,6 +52,7 @@ typedef struct {
 
 /* Function prototypes */
 int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us);
+int dht11_decode(const uint8_t data[5], float *humidity, float *temperature);
 sensor_config_t *load_config(const char *path, int *count);
 void free_config(sensor_config_t *configs, int count);
 int output_json(sensor_config_t *configs, int count, const char *filter, ws_location_filter_t location_filter);

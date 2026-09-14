@@ -1,3 +1,20 @@
+sensor-dht11 (2.4.2) stable; urgency=medium
+
+  * Temperatures below 0 C are decoded. Current DHT11 parts, rated down to
+    -20 C, send a temperature's tenths in the low bits of its fourth byte and
+    set that byte's top bit below zero. The driver added the whole byte, so
+    -2.3 C was published as 15.1 C with no error, and every reading from just
+    below zero to -20 C came out between 12.9 and 32.8 C. A set top bit now
+    makes the temperature the negative of its digits
+  * A frame whose checksum holds but whose values no DHT11 can report, with a
+    tenths digit above 9, humidity above 100 % or a temperature outside -40
+    to 80 C, counts as a failed read. Its bytes are logged and the read is
+    retried
+  * A debug build prints the bytes of every frame it receives, and its
+    messages end in a newline rather than a literal backslash and n
+
+ -- Ed Baker <ed@ebaker.me.uk>  Mon, 14 Sep 2026 15:23:36 +0100
+
 sensor-dht11 (2.4.1) stable; urgency=medium
 
   * The driver reaches the GPIO pin through the Linux GPIO character device,

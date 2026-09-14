@@ -32,6 +32,12 @@ static volatile sig_atomic_t g_line_fd = -1;  /* line held by a read, or -1 */
 #define DHT11_START_LOW_US      20000   /* Start signal: pull low for 20ms */
 #define DHT11_TIMEOUT_US        1000    /* Timeout waiting for edges */
 
+/* Readings no DHT11 can give. Current parts are rated for -20 to 60 C; the
+ * limits leave a margin, so a frame outside them was misread. */
+#define DHT11_TEMPERATURE_MIN   (-40.0f)
+#define DHT11_TEMPERATURE_MAX   80.0f
+#define DHT11_HUMIDITY_MAX      100.0f
+
 /*
  * Get current time in microseconds
  */
@@ -305,6 +311,37 @@ static int dht11_read_raw(int gpio_pin, uint8_t data[5], char *error_msg, size_t
     return ret;
 }
 
+/*
+ * Decode a DHT11 frame whose checksum has been verified.
+ *
+ * Bytes 0 and 1 carry the humidity's whole part and tenths, bytes 2 and 3 the
+ * temperature's. Parts rated 0 to 50 C send zero tenths. Parts rated down to
+ * -20 C send the temperature's tenths in the low bits of byte 3 and set its
+ * top bit below 0 C, when the temperature is the negative of its digits:
+ * 02 83 is -2.3 C.
+ *
+ * Returns 0 with both values set, or -1, leaving them untouched, when a
+ * tenths digit is above 9 or a value is outside what a DHT11 can report. The
+ * caller treats that as a failed read.
+ */
+int dht11_decode(const uint8_t data[5], float *humidity, float *temperature) {
+    int humidity_tenths = data[1];
+    int temperature_tenths = data[3] & 0x7F;
+    float h = (float)data[0] + (float)humidity_tenths / 10.0f;
+    float t = (float)data[2] + (float)temperature_tenths / 10.0f;
+
+    if (data[3] & 0x80) {
+        t = -t;
+    }
+    if (humidity_tenths > 9 || temperature_tenths > 9 || h > DHT11_HUMIDITY_MAX ||
+        t < DHT11_TEMPERATURE_MIN || t > DHT11_TEMPERATURE_MAX) {
+        return -1;
+    }
+    *humidity = h;
+    *temperature = t;
+    return 0;
+}
+
 /* Retry delays in microseconds: 0.05s x2, 0.1s x3, then 0.2, 0.4, 0.8, 1.6, 2s x3.
  * The full schedule sleeps for 9.4 s, which on its own exceeds the 10 s sr
  * allows a driver; it is walked only as far as the caller's budget permits. */
@@ -349,19 +386,21 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us)
     for (attempt = 0; attempt <= num_retries; attempt++) {
         attempts_made = attempt + 1;
         if (dht11_read_raw(gpio_pin, data, reading->error_msg, sizeof(reading->error_msg)) == 0) {
-            /* DHT11 format: data[0]=humidity int, data[1]=humidity dec (always 0)
-             *               data[2]=temp int, data[3]=temp dec (always 0)
-             *               data[4]=checksum */
-            reading->humidity = (float)data[0] + (float)data[1] / 10.0f;
-            reading->temperature = (float)data[2] + (float)data[3] / 10.0f;
-            reading->valid = true;
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG: Success on attempt %d\\n", attempt + 1);
+            fprintf(stderr, "DEBUG: frame %02X %02X %02X %02X %02X on attempt %d\n",
+                    data[0], data[1], data[2], data[3], data[4], attempt + 1);
 #endif
-            /* Restore normal scheduling */
-            if (had_rt)
-                sched_setscheduler(0, SCHED_OTHER, &normal_param);
-            return 0;
+            if (dht11_decode(data, &reading->humidity, &reading->temperature) == 0) {
+                reading->valid = true;
+                /* Restore normal scheduling */
+                if (had_rt)
+                    sched_setscheduler(0, SCHED_OTHER, &normal_param);
+                return 0;
+            }
+            /* The checksum held, but no DHT11 sends these values, so the frame
+               was misread. Its bytes are logged, and the read is retried. */
+            ws_log_warning("DHT11 on GPIO %d sent impossible values: %02X %02X %02X %02X %02X",
+                           gpio_pin, data[0], data[1], data[2], data[3], data[4]);
         }
         
         /* If we got a permission error, don't retry - it won't help */
@@ -372,7 +411,7 @@ int read_dht11(int gpio_pin, sensor_reading_t *reading, unsigned long budget_us)
         }
         
 #ifdef DEBUG
-        fprintf(stderr, "DEBUG: Attempt %d failed\\n", attempt + 1);
+        fprintf(stderr, "DEBUG: Attempt %d failed\n", attempt + 1);
 #endif
 
         /* Wait before the next attempt, unless the schedule is exhausted or

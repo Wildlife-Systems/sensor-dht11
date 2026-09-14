@@ -131,11 +131,13 @@ under SCHED_FIFO real-time scheduling to reduce the timing failures caused by
 pre-emption. The `cap_sys_nice` capability, which allows this without root, is
 set on the binary when the package is installed.
 
-A failed read is retried with increasing delays, within a budget of 8 seconds
-per invocation shared between the configured sensors. The budget keeps the
-program within the 10 seconds that `sr` allows, so that a sensor which cannot
-be read is reported with an error rather than the program being terminated
-before it can report anything.
+A read fails when the sensor does not answer in time, when its checksum does
+not match, or when it reports values that no DHT11 can give. A failed read is
+retried with increasing delays, within a budget of 8 seconds per invocation
+shared between the configured sensors. The budget keeps the program within the
+10 seconds that `sr` allows, so that a sensor which cannot be read is reported
+with an error rather than the program being terminated before it can report
+anything.
 
 ## Exit codes
 
