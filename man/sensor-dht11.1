@@ -1,4 +1,4 @@
-.TH SENSOR-DHT11 1 "September 2026" "sensor-dht11 2.4.1" "WildlifeSystems"
+.TH SENSOR-DHT11 1 "September 2026" "sensor-dht11 2.4.2" "WildlifeSystems"
 .SH NAME
 sensor-dht11 \- read DHT11 temperature and humidity sensors
 .SH SYNOPSIS
@@ -141,6 +141,8 @@ because \fBsc-prototype\fR was unavailable. Nothing is printed in that case.
 .B 60
 The \fBidentify\fR command.
 .SH NOTES
+A read fails when the sensor does not answer in time, when its checksum does
+not match, or when it reports values that no DHT11 can give.
 A failed read is retried with increasing delays, within a budget of 8 seconds
 per invocation shared between the configured sensors. The budget keeps the
 program inside the 10-second limit that
