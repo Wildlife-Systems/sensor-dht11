@@ -1,4 +1,5 @@
+# A bare tar-ignore keeps dpkg-source's default exclusions, among them .git
+# and the files of other version control systems, backups and swap files. The
+# pattern after it adds to those defaults rather than replacing them.
+tar-ignore
 tar-ignore=benchmarks
-tar-ignore=venv
-tar-ignore=*.so
-tar-ignore=sensor-dht11-bench
